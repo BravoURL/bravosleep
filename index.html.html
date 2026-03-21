@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BravoSleep">
+<title>BravoSleep</title>
+<style>
+/* ── AUTH & LOADING ── */
+.loading-screen{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.loading-screen svg{animation:lspin 2s linear infinite;opacity:.6}
+@keyframes lspin{to{transform:rotate(360deg)}}
+.loading-screen p{font-size:13px;color:var(--muted)}
+.auth-wrap{position:relative;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:32px 24px}
+.auth-card{background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:20px;padding:28px 24px;width:100%;max-width:360px;margin-bottom:12px}
+.auth-duck{display:block;margin:0 auto 8px;width:52px;height:52px}
+.auth-title{font-family:'Lora',serif;font-size:24px;color:var(--cream);text-align:center;margin-bottom:3px}
+.auth-title span{color:var(--blue2)}
+.auth-sub{font-size:12px;color:var(--muted);text-align:center;margin-bottom:22px}
+.auth-label{font-size:12px;color:var(--muted);margin-bottom:5px;display:block}
+.auth-input{width:100%;background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;padding:11px 14px;outline:none;margin-bottom:13px}
+.auth-input:focus{border-color:var(--blue)}
+.auth-btn{width:100%;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--blue),#4a8ab8);color:white;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;transition:opacity .2s}
+.auth-btn:active{opacity:.82}
+.auth-btn.sec{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.auth-switch{font-size:12.5px;color:var(--muted);text-align:center;cursor:pointer;margin-top:4px}
+.auth-switch span{color:var(--blue2);text-decoration:underline}
+.auth-error{font-size:12px;color:var(--coral);text-align:center;margin-bottom:10px;min-height:16px}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:10px 0}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.auth-divider span{font-size:11px;color:var(--muted)}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;margin-left:5px;transition:all .3s;vertical-align:middle}
+.sync-dot.syncing{background:var(--blue);animation:sdpulse 1s infinite}
+.sync-dot.error{background:var(--coral)}
+@keyframes sdpulse{0%,100%{opacity:1}50%{opacity:.3}}
+.signout-btn{position:absolute;right:14px;top:18px;background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:4px 8px;border-radius:6px;font-family:'DM Sans',sans-serif}
+.header-meta{display:flex;align-items:center;justify-content:center;gap:4px}
+.invite-box{background:rgba(123,175,212,.1);border:1px solid rgba(123,175,212,.3);border-radius:14px;padding:20px;text-align:center;margin-top:10px}
+.invite-code{font-family:'Lora',serif;font-size:32px;color:var(--blue2);letter-spacing:6px;padding:12px;background:var(--faint);border-radius:10px;margin:10px 0}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#0f1a2e;
+  --bg2:#152035;
+  --bg3:#1a2840;
+  --blue:#7bafd4;
+  --blue2:#a8cce0;
+  --blue-faint:rgba(123,175,212,0.12);
+  --brown:#8b5e3c;
+  --brown2:#a8754f;
+  --cream:#f2ece0;
+  --cream2:#e8e0d0;
+  --sage:#8a9e6e;
+  --coral:#d4714a;
+  --green:#7aaa6e;
+  --text:#ede8dc;
+  --muted:rgba(237,232,220,0.5);
+  --faint:rgba(237,232,220,0.08);
+  --border:rgba(237,232,220,0.1);
+  --card:rgba(255,255,255,0.055);
+  --stripe-blue:rgba(123,175,212,0.18);
+  --stripe-brown:rgba(139,94,60,0.22);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+/* Subtle stripe background — nod to the room lamp */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    repeating-linear-gradient(170deg,var(--stripe-blue) 0px,var(--stripe-blue) 18px,transparent 18px,transparent 54px,var(--stripe-brown) 54px,var(--stripe-brown) 72px,transparent 72px,transparent 108px),
+    radial-gradient(ellipse at 20% 0%,rgba(123,175,212,0.08) 0%,transparent 60%),
+    radial-gradient(ellipse at 80% 100%,rgba(139,94,60,0.06) 0%,transparent 60%);
+  opacity:0.35}
+
+/* Stars */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%,rgba(255,255,255,.4) 0%,transparent 100%),
+    radial-gradient(1px 1px at 34% 44%,rgba(255,255,255,.25) 0%,transparent 100%),
+    radial-gradient(1.5px 1.5px at 52% 11%,rgba(255,255,255,.38) 0%,transparent 100%),
+    radial-gradient(1px 1px at 71% 33%,rgba(255,255,255,.3) 0%,transparent 100%),
+    radial-gradient(1px 1px at 88% 56%,rgba(255,255,255,.22) 0%,transparent 100%),
+    radial-gradient(1px 1px at 17% 67%,rgba(255,255,255,.28) 0%,transparent 100%),
+    radial-gradient(1.5px 1.5px at 44% 79%,rgba(255,255,255,.32) 0%,transparent 100%),
+    radial-gradient(1px 1px at 78% 88%,rgba(255,255,255,.18) 0%,transparent 100%)}
+
+/* Layout */
+.app{position:relative;z-index:1;display:flex;flex-direction:column;height:100%;max-width:430px;margin:0 auto;width:100%}
+
+/* Header */
+.header{padding:18px 20px 10px;text-align:center;flex-shrink:0;position:relative}
+.header-duck{display:block;margin:0 auto 6px;width:52px;height:52px}
+.header h1{font-family:'Lora',serif;font-size:24px;color:var(--cream);letter-spacing:.3px}
+.header h1 span{color:var(--blue2)}
+.header p{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* Nav */
+.nav{display:flex;margin:0 14px 12px;background:var(--faint);border:1px solid var(--border);border-radius:14px;padding:3px;gap:2px;flex-shrink:0}
+.nb{flex:1;padding:7px 2px;border:none;background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;border-radius:11px;cursor:pointer;transition:all .2s;letter-spacing:.1px}
+.nb.active{background:var(--bg3);color:var(--blue2);box-shadow:0 1px 8px rgba(0,0,0,.4)}
+
+/* Scrollable content */
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 14px 30px}
+.sec{display:none}.sec.active{display:block}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:10px}
+.ct{font-family:'Lora',serif;font-size:15px;color:var(--blue2);margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.ct-duck{width:18px;height:18px;flex-shrink:0}
+
+/* Today header */
+.day-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.day-header h2{font-family:'Lora',serif;font-size:17px;color:var(--cream)}
+.day-header .date{font-size:11px;color:var(--muted)}
+
+/* Stats */
+.stats-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center}
+.stat-val{font-family:'Lora',serif;font-size:22px;color:var(--blue2);line-height:1}
+.stat-lbl{font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.6px}
+
+/* Nap mode toggle */
+.nm-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.nm-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:500}
+.nm-toggle{display:flex;background:var(--faint);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px}
+.nm-btn{padding:5px 14px;border:none;background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;border-radius:8px;cursor:pointer;transition:all .2s}
+.nm-btn.active{background:var(--bg3);color:var(--blue2);box-shadow:0 1px 6px rgba(0,0,0,.3)}
+
+/* Form rows */
+.frow{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.flbl{font-size:12.5px;color:var(--muted)}.flbl strong{color:var(--text);font-weight:500;display:block;font-size:13px}
+.type-btns{display:flex;gap:6px}
+.tbtn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:all .2s}
+.tbtn.nap-on{background:rgba(123,175,212,.15);border-color:var(--blue);color:var(--blue2)}
+.tbtn.night-on{background:rgba(139,94,60,.15);border-color:var(--brown2);color:var(--cream2)}
+
+input[type=time],input[type=number],input[type=date],input[type=text]{background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:7px 10px;outline:none;-webkit-appearance:none}
+input[type=time]{width:118px}
+input[type=number]{width:70px;text-align:center}
+input[type=date]{width:140px}
+input[type=text]{width:100%}
+input:focus{border-color:var(--blue)}
+
+.settle-btns{display:flex;gap:5px;flex-wrap:wrap}
+.sbtn{padding:5px 9px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11.5px;cursor:pointer;transition:all .2s;font-family:'DM Sans',sans-serif}
+.sbtn.on{background:rgba(123,175,212,.15);border-color:var(--blue);color:var(--blue2)}
+
+.add-btn{width:100%;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--blue),#4a8ab8);color:white;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;margin-top:4px;letter-spacing:.3px;transition:opacity .2s}
+.add-btn:active{opacity:.82}
+.add-btn.brown-btn{background:linear-gradient(135deg,var(--brown2),#7a4a28)}
+
+/* Log list */
+.log-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.log-item:last-child{border-bottom:none}
+.ldot{width:9px;height:9px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.ldot-nap{background:var(--blue)}.ldot-night{background:var(--brown2)}
+.linfo{flex:1}
+.ltype{font-size:13px;font-weight:500;color:var(--text)}
+.lmeta{font-size:11.5px;color:var(--muted);margin-top:2px}
+.ldel{background:none;border:none;color:rgba(255,255,255,.18);cursor:pointer;font-size:15px;padding:0 4px;transition:color .2s}
+.ldel:active{color:var(--coral)}
+
+.empty{text-align:center;padding:24px 12px;color:var(--muted);font-size:12.5px;line-height:1.7}
+.empty .eico{font-size:24px;display:block;margin-bottom:8px;opacity:.5}
+
+/* Tips & plan */
+.tip{background:rgba(123,175,212,.06);border:1px solid rgba(123,175,212,.15);border-left:3px solid var(--blue);border-radius:0 10px 10px 0;padding:11px 13px;margin-bottom:10px;font-size:12.5px;line-height:1.65;color:rgba(237,232,220,.82)}
+.tip strong{color:var(--blue2);font-weight:500}
+.tip.red{background:rgba(212,113,74,.06);border-color:rgba(212,113,74,.3);border-left-color:var(--coral)}
+.tip.red strong{color:var(--coral)}
+.tip.green{background:rgba(122,170,110,.06);border-color:rgba(122,170,110,.3);border-left-color:var(--green)}
+.tip.green strong{color:var(--green)}
+.tip.brown{background:rgba(139,94,60,.08);border-color:rgba(139,94,60,.25);border-left-color:var(--brown2)}
+.tip.brown strong{color:var(--brown2)}
+
+.phase-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.ptab{padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11.5px;cursor:pointer;transition:all .2s;font-family:'DM Sans',sans-serif}
+.ptab.active{background:rgba(123,175,212,.15);border-color:var(--blue);color:var(--blue2)}
+
+.phase-badge{display:inline-block;background:rgba(123,175,212,.12);border:1px solid rgba(123,175,212,.3);border-radius:20px;padding:3px 12px;font-size:11px;color:var(--blue2);margin-bottom:10px;letter-spacing:.3px}
+
+.steps{list-style:none}
+.steps li{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px;line-height:1.55;color:rgba(237,232,220,.78)}
+.steps li:last-child{border-bottom:none}
+.snum{width:21px;height:21px;border-radius:50%;background:rgba(123,175,212,.12);border:1px solid rgba(123,175,212,.25);color:var(--blue2);font-size:10.5px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.snum.done{background:rgba(122,170,110,.15);border-color:rgba(122,170,110,.3);color:var(--green)}
+
+.sched-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px}
+.sched-row:last-child{border-bottom:none}
+.stime{color:var(--blue2);font-weight:500;width:58px;flex-shrink:0;font-size:12px}
+.sico{font-size:14px;width:20px;text-align:center;flex-shrink:0}
+.slbl{color:rgba(237,232,220,.78)}
+
+/* Day type buttons */
+.day-type-btn{padding:10px 8px;border-radius:12px;border:1px solid var(--border);background:var(--faint);color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:all .2s;text-align:left;line-height:1.4;width:100%}
+.day-type-btn span{font-size:10px;color:var(--muted);display:block;margin-top:1px}
+.day-type-btn.active{background:rgba(123,175,212,.15);border-color:var(--blue);color:var(--text)}
+.day-type-btn.active span{color:var(--blue2)}
+
+/* Section label */
+.sec-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.9px;margin-bottom:8px;font-weight:500}
+
+/* ── TIMER ── */
+.timer-display{font-family:'Lora',serif;font-size:60px;color:var(--text);letter-spacing:-2px;line-height:1;margin:10px 0 6px;font-variant-numeric:tabular-nums}
+.timer-phase-badge{display:inline-block;padding:4px 16px;border-radius:20px;font-size:10.5px;font-weight:500;letter-spacing:1.2px;margin-bottom:12px;border:1px solid;text-transform:uppercase}
+.settling-badge{background:rgba(212,113,74,.12);border-color:var(--coral);color:var(--coral)}
+.sleeping-badge{background:rgba(123,175,212,.12);border-color:var(--blue);color:var(--blue2)}
+.earlyawake-badge{background:rgba(139,94,60,.15);border-color:var(--brown2);color:var(--cream2)}
+
+.timer-start-btn{padding:15px 22px;border-radius:14px;border:1px solid var(--blue);background:rgba(123,175,212,.15);color:var(--blue2);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:all .2s;letter-spacing:.2px}
+.timer-start-btn:active{opacity:.8;transform:scale(.97)}
+.timer-start-btn.night{border-color:var(--brown2);background:rgba(139,94,60,.15);color:var(--cream2)}
+
+.timer-action-btn{display:block;width:100%;padding:15px;border-radius:13px;border:none;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;cursor:pointer;transition:all .2s;letter-spacing:.2px;margin-bottom:9px}
+.timer-action-btn:active{opacity:.82;transform:scale(.98)}
+.asleep-btn{background:linear-gradient(135deg,var(--blue),#4a8ab8);color:white}
+.awake-btn{background:linear-gradient(135deg,var(--brown2),#7a4a28);color:white}
+.earlyawake-btn{background:rgba(212,113,74,.15);border:1px solid var(--coral);color:var(--coral);font-size:13px;padding:11px}
+.wait-btn{background:rgba(123,175,212,.15);border:1px solid var(--blue);color:var(--blue2);font-size:13px;padding:11px}
+
+.timer-cancel-btn{display:block;width:100%;padding:9px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;margin-top:2px}
+
+.checkin-msg{font-size:13px;color:var(--blue2);min-height:18px;margin-bottom:4px}
+.checkin-countdown{font-size:12px;color:var(--muted);margin-bottom:18px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.checkin-active{animation:pulse 1.5s infinite;color:var(--coral)}
+
+/* Duck mascot sizes */
+.duck-sm{width:22px;height:22px}
+.duck-md{width:40px;height:40px}
+.duck-sleeping{opacity:.7}
+
+/* Coach */
+.ask-area{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px}
+textarea{width:100%;background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.6;resize:none;outline:none;min-height:70px}
+textarea::placeholder{color:var(--muted)}
+.ask-row{display:flex;gap:8px;margin-top:8px}
+.ask-btn{flex:1;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--blue2),#5a9abf);color:#0a1520;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:opacity .2s}
+.ask-btn:disabled{opacity:.45;cursor:not-allowed}
+.clear-btn{padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer}
+
+.coach-response{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:13px;line-height:1.7;color:rgba(237,232,220,.88);margin-bottom:10px}
+.coach-response h4{font-family:'Lora',serif;font-size:14px;color:var(--blue2);margin-bottom:8px}
+.coach-response p{margin-bottom:8px}.coach-response p:last-child{margin-bottom:0}
+.coach-response strong{color:var(--blue2);font-weight:500}
+.typing{display:flex;gap:5px;align-items:center;padding:8px 0}
+.typing span{width:7px;height:7px;border-radius:50%;background:var(--blue);animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+
+.curveball-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.cbtn{padding:6px 11px;border-radius:20px;border:1px solid rgba(123,175,212,.25);background:rgba(123,175,212,.08);color:var(--blue2);font-size:11.5px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;white-space:nowrap}
+.cbtn:active{background:rgba(123,175,212,.2)}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--blue);color:white;padding:9px 18px;border-radius:20px;font-size:12.5px;font-weight:500;opacity:0;transition:all .3s;pointer-events:none;z-index:100;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Progress */
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:12px}
+.wday{aspect-ratio:1;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid var(--border);background:var(--faint);cursor:pointer;transition:all .2s}
+.wday .wd-label{color:var(--muted);font-size:9px;text-transform:uppercase}
+.wday .wd-num{font-size:13px;color:var(--text);font-weight:500}
+.wday .wd-dot{width:5px;height:5px;border-radius:50%}
+.wday.good{background:rgba(122,170,110,.12);border-color:rgba(122,170,110,.3)}.wday.good .wd-dot{background:var(--green)}
+.wday.mixed{background:rgba(123,175,212,.08);border-color:rgba(123,175,212,.2)}.wday.mixed .wd-dot{background:var(--blue)}
+.wday.bad{background:rgba(212,113,74,.08);border-color:rgba(212,113,74,.2)}.wday.bad .wd-dot{background:var(--coral)}
+.wday.today{border-color:var(--blue2);box-shadow:0 0 0 1px var(--blue2) inset}
+
+.prog-row{margin-bottom:9px}
+.prog-lbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.prog-lbl span:last-child{color:var(--text);font-weight:500}
+.prog-track{height:5px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
+.prog-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.pf-blue{background:var(--blue)}.pf-brown{background:var(--brown2)}.pf-green{background:var(--green)}
+
+/* Night decision tree */
+.dtree{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:10px}
+.dtrow{display:flex;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px}
+.dtrow:last-child{border-bottom:none}
+.dtrow.header{background:rgba(123,175,212,.08);color:var(--blue2);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+.dt-time{width:58px;flex-shrink:0;color:var(--blue2);font-weight:500;font-size:12px}
+.dt-action{flex:1;color:rgba(237,232,220,.8)}
+.dt-ico{font-size:14px;width:20px;text-align:center;flex-shrink:0}
+
+/* Murmur */
+.murmur{background:rgba(123,175,212,.07);border:1px solid rgba(123,175,212,.2);border-left:3px solid var(--blue);border-radius:0 12px 12px 0;padding:12px 14px;margin-bottom:10px;font-size:13px;line-height:1.65;color:rgba(237,232,220,.88)}
+
+/* Manual log toggle */
+.toggle-link{display:block;width:100%;padding:9px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12.5px;cursor:pointer;text-align:left;margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-screen" id="loading-screen">
+  <svg width="44" height="44" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="35" stroke="rgba(123,175,212,0.3)" stroke-width="4"/><path d="M40 5 A35 35 0 0 1 75 40" stroke="#7bafd4" stroke-width="4" stroke-linecap="round"/></svg>
+  <p>Loading BravoSleep…</p>
+</div>
+
+<!-- AUTH -->
+<div class="auth-wrap" id="auth-screen">
+  <div id="auth-signin" class="auth-card">
+    <svg class="auth-duck" viewBox="0 0 80 80" fill="none"><ellipse cx="40" cy="52" rx="22" ry="18" fill="#f0ead8"/><ellipse cx="50" cy="54" rx="12" ry="8" fill="#e0d8c4" transform="rotate(-10 50 54)"/><ellipse cx="34" cy="38" rx="9" ry="12" fill="#f0ead8"/><circle cx="32" cy="27" r="12" fill="#f0ead8"/><circle cx="36" cy="24" r="2.5" fill="#1a1a1a"/><circle cx="37" cy="23" r=".8" fill="white"/><path d="M44 26 L52 24 L50 29 L44 28Z" fill="#e8921a"/><path d="M26 34 Q34 38 42 34 Q40 42 34 44 Q28 42 26 34Z" fill="#6a8a3a"/></svg>
+    <h1 class="auth-title">Bravo<span>Sleep</span></h1>
+    <p class="auth-sub">Vaughan's sleep coach</p>
+    <div class="auth-error" id="signin-error"></div>
+    <label class="auth-label">Email</label>
+    <input class="auth-input" type="email" id="signin-email" placeholder="you@email.com" autocomplete="email">
+    <label class="auth-label">Password</label>
+    <input class="auth-input" type="password" id="signin-password" placeholder="••••••••" autocomplete="current-password">
+    <button class="auth-btn" onclick="signIn()">Sign in</button>
+    <div class="auth-divider"><span>new here?</span></div>
+    <p class="auth-switch" onclick="showAuth('signup')">Create an account → <span>Sign up</span></p>
+  </div>
+
+  <div id="auth-signup" class="auth-card" style="display:none">
+    <svg class="auth-duck" viewBox="0 0 80 80" fill="none"><ellipse cx="40" cy="52" rx="22" ry="18" fill="#f0ead8"/><ellipse cx="34" cy="38" rx="9" ry="12" fill="#f0ead8"/><circle cx="32" cy="27" r="12" fill="#f0ead8"/><circle cx="36" cy="24" r="2.5" fill="#1a1a1a"/><path d="M44 26 L52 24 L50 29 L44 28Z" fill="#e8921a"/><path d="M26 34 Q34 38 42 34 Q40 42 34 44 Q28 42 26 34Z" fill="#6a8a3a"/></svg>
+    <h1 class="auth-title">Bravo<span>Sleep</span></h1>
+    <p class="auth-sub">Create your account</p>
+    <div class="auth-error" id="signup-error"></div>
+    <label class="auth-label">Your name</label>
+    <input class="auth-input" type="text" id="signup-name" placeholder="e.g. Bernadette">
+    <label class="auth-label">Email</label>
+    <input class="auth-input" type="email" id="signup-email" placeholder="you@email.com" autocomplete="email">
+    <label class="auth-label">Password</label>
+    <input class="auth-input" type="password" id="signup-password" placeholder="min 6 characters" autocomplete="new-password">
+    <div class="auth-divider"><span>joining your partner's account?</span></div>
+    <label class="auth-label">Family invite code <span style="color:var(--muted);font-size:11px">(leave blank to start new)</span></label>
+    <input class="auth-input" type="text" id="signup-invite" placeholder="6-character code" style="text-transform:lowercase;letter-spacing:3px">
+    <button class="auth-btn" onclick="signUp()">Create account</button>
+    <p class="auth-switch" onclick="showAuth('signin')">Already have an account? <span>Sign in</span></p>
+  </div>
+
+  <div id="auth-invite" class="invite-box" style="display:none;width:100%;max-width:360px">
+    <p style="font-size:13px;color:var(--muted);margin-bottom:4px">Share this code with your partner so they can join</p>
+    <div class="invite-code" id="invite-display">———</div>
+    <button class="auth-btn" onclick="copyInvite()" style="margin-bottom:8px">Copy invite code</button>
+    <button class="auth-btn sec" onclick="enterApp()">Enter BravoSleep →</button>
+  </div>
+</div>
+<div class="app" id="main-app">
+
+  <!-- HEADER with duck SVG -->
+  <div class="header">
+    <button class="signout-btn" onclick="signOut()">sign out</button>
+    <svg class="header-duck" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Body -->
+      <ellipse cx="40" cy="52" rx="22" ry="18" fill="#f0ead8"/>
+      <ellipse cx="40" cy="52" rx="22" ry="18" fill="url(#bodyShade)" opacity="0.3"/>
+      <!-- Wing -->
+      <ellipse cx="50" cy="54" rx="12" ry="8" fill="#e0d8c4" transform="rotate(-10 50 54)"/>
+      <!-- Neck -->
+      <ellipse cx="34" cy="38" rx="9" ry="12" fill="#f0ead8"/>
+      <!-- Head -->
+      <circle cx="32" cy="27" r="12" fill="#f0ead8"/>
+      <!-- Eye -->
+      <circle cx="36" cy="24" r="2.5" fill="#1a1a1a"/>
+      <circle cx="37" cy="23" r="0.8" fill="white"/>
+      <!-- Beak -->
+      <path d="M44 26 L52 24 L50 29 L44 28 Z" fill="#e8921a"/>
+      <!-- Green check neckerchief -->
+      <path d="M26 34 Q34 38 42 34 Q40 42 34 44 Q28 42 26 34Z" fill="#6a8a3a" opacity="0.9"/>
+      <path d="M28 35 L32 36 M30 37 L35 38 M29 39 L33 40" stroke="#4a6a22" stroke-width="0.8" opacity="0.6"/>
+      <!-- Feet -->
+      <ellipse cx="32" cy="68" rx="8" ry="3" fill="#e8921a" transform="rotate(-8 32 68)"/>
+      <ellipse cx="48" cy="69" rx="8" ry="3" fill="#e8921a" transform="rotate(8 48 69)"/>
+      <defs>
+        <radialGradient id="bodyShade" cx="30%" cy="30%"><stop offset="0%" stop-color="white"/><stop offset="100%" stop-color="#8b6a3a"/></radialGradient>
+      </defs>
+    </svg>
+    <h1>Bravo<span>Sleep</span></h1>
+    <div class="header-meta">
+      <p>Vaughan · Age <span id="baby-age">…</span></p>
+      <span class="sync-dot" id="sync-dot" title="Sync status"></span>
+    </div>
+  </div>
+
+  <div class="nav">
+    <button class="nb active" onclick="showTab('today',this)">Today</button>
+    <button class="nb" onclick="showTab('plan',this)">The Plan</button>
+    <button class="nb" onclick="showTab('nights',this)">Nights</button>
+    <button class="nb" onclick="showTab('coach',this)">Coach</button>
+    <button class="nb" onclick="showTab('progress',this)">Progress</button>
+  </div>
+
+  <div class="content">
+
+    <!-- ═══════════════════════════════ TODAY ═══════════════════════════════ -->
+    <div class="sec active" id="tab-today">
+      <div class="day-header">
+        <h2 id="today-greeting">Today</h2>
+        <span class="date" id="today-date"></span>
+      </div>
+
+      <!-- Nap mode toggle -->
+      <div class="nm-row">
+        <span class="nm-label">Nap mode</span>
+        <div class="nm-toggle">
+          <button class="nm-btn active" id="nm-2" onclick="setNapMode(2)">2 naps</button>
+          <button class="nm-btn" id="nm-3" onclick="setNapMode(3)">3 naps</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val" id="stat-naps">0</div><div class="stat-lbl">Naps</div></div>
+        <div class="stat"><div class="stat-val" id="stat-sleep">—</div><div class="stat-lbl">Sleep</div></div>
+        <div class="stat"><div class="stat-val" id="stat-settle">—</div><div class="stat-lbl">Settle avg</div></div>
+      </div>
+
+      <!-- Wake window checker -->
+      <div class="card">
+        <div class="ct">
+          <svg class="ct-duck duck-sm" viewBox="0 0 80 80" fill="none"><circle cx="32" cy="27" r="12" fill="#f0ead8"/><circle cx="36" cy="24" r="2.5" fill="#1a1a1a"/><path d="M44 26 L52 24 L50 29 L44 28 Z" fill="#e8921a"/><path d="M26 34 Q34 38 42 34 Q40 42 34 44 Q28 42 26 34Z" fill="#6a8a3a"/></svg>
+          Wake window
+        </div>
+        <div class="frow">
+          <div class="flbl"><strong>Last woke up at</strong>Start the countdown</div>
+          <input type="time" id="last-wake" oninput="updateWakeWindow()">
+        </div>
+        <div id="ww-result" style="font-size:13px;line-height:1.6;color:var(--muted);padding:8px 10px;background:var(--faint);border-radius:8px">Enter last wake time above →</div>
+      </div>
+
+      <!-- LIVE TIMER -->
+      <div class="card" id="timer-card">
+        <div class="ct">
+          <svg class="ct-duck duck-sm" viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="30" fill="rgba(123,175,212,0.15)"/><text x="40" y="47" text-anchor="middle" font-size="28">⏱</text></svg>
+          Sleep timer
+        </div>
+
+        <!-- IDLE -->
+        <div id="ts-idle">
+          <div style="text-align:center;padding:6px 0 14px">
+            <svg style="display:block;margin:0 auto 10px;opacity:.4" width="36" height="36" viewBox="0 0 80 80" fill="none"><ellipse cx="40" cy="52" rx="22" ry="18" fill="#f0ead8"/><circle cx="32" cy="27" r="12" fill="#f0ead8"/><circle cx="36" cy="24" r="2" fill="#1a1a1a"/><path d="M44 26 L50 24 L49 28 L44 27Z" fill="#e8921a"/><path d="M26 34 Q34 38 42 34 Q40 42 34 44 Q28 42 26 34Z" fill="#6a8a3a"/><path d="M30 24 Q35 18 38 22" stroke="#8b6a3a" stroke-width="1.5" fill="none" opacity="0.5"/></svg>
+            <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">Tap when Vaughan goes down</div>
+            <div style="display:flex;gap:10px;justify-content:center">
+              <button class="timer-start-btn" onclick="startTimer('nap')">😴 Start nap</button>
+              <button class="timer-start-btn night" onclick="startTimer('night')">🌙 Night wake</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTLING -->
+        <div id="ts-settling" style="display:none">
+          <div style="text-align:center">
+            <div class="timer-phase-badge settling-badge">Settling</div><br>
+            <div class="timer-display" id="settle-display">0:00</div>
+            <div class="checkin-msg" id="checkin-msg"></div>
+            <div class="checkin-countdown" id="checkin-countdown"></div>
+            <button class="timer-action-btn asleep-btn" onclick="markAsleep()">😴 He's asleep</button>
+            <button class="timer-action-btn earlyawake-btn" style="display:none" id="btn-notworking" onclick="napNotWorking()">😤 Not working / give up</button>
+            <button class="timer-cancel-btn" onclick="cancelTimer()">Cancel timer</button>
+          </div>
+        </div>
+
+        <!-- SLEEPING -->
+        <div id="ts-sleeping" style="display:none">
+          <div style="text-align:center">
+            <div class="timer-phase-badge sleeping-badge">Sleeping 💤</div><br>
+            <div class="timer-display" id="sleep-display">0:00</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px" id="settled-label"></div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:16px">He's down. Go make a coffee ☕</div>
+            <button class="timer-action-btn awake-btn" onclick="markAwake()">☀️ He's awake!</button>
+            <button class="timer-action-btn earlyawake-btn" onclick="earlyWake()">😭 Woken up early</button>
+            <button class="timer-cancel-btn" onclick="cancelTimer()">Cancel timer</button>
+          </div>
+        </div>
+
+        <!-- EARLY WAKE PROTOCOL -->
+        <div id="ts-earlywake" style="display:none">
+          <div style="text-align:center">
+            <div class="timer-phase-badge earlyawake-badge">Woken Early</div>
+            <div style="font-size:13px;color:var(--muted);margin:8px 0 4px" id="earlywake-slept"></div>
+            <div style="font-size:13px;color:var(--text);margin-bottom:16px;line-height:1.6" id="earlywake-advice"></div>
+            <div class="timer-display" id="earlywake-display" style="font-size:40px">0:00</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:16px" id="earlywake-countdown"></div>
+            <button class="timer-action-btn asleep-btn" id="btn-resettled" onclick="resettled()" style="display:none">✅ He resettled!</button>
+            <button class="timer-action-btn awake-btn" onclick="confirmEarlyAwake()">He's properly awake — log it</button>
+            <button class="timer-cancel-btn" onclick="cancelTimer()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- NIGHT WAKE -->
+        <div id="ts-nightwake" style="display:none">
+          <div style="text-align:center">
+            <div class="timer-phase-badge" style="background:rgba(139,94,60,.15);border-color:var(--brown2);color:var(--cream2)">Night Wake</div><br>
+            <div class="timer-display" id="nightwake-display">0:00</div>
+            <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Following the night tree? Good.</div>
+            <button class="timer-action-btn asleep-btn" onclick="endNightWake()">💤 Back to sleep</button>
+            <button class="timer-cancel-btn" onclick="cancelTimer()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- COMPLETE -->
+        <div id="ts-complete" style="display:none">
+          <div style="text-align:center;padding:4px 0 12px">
+            <!-- Sleeping duck SVG -->
+            <svg style="display:block;margin:0 auto 8px" width="44" height="44" viewBox="0 0 80 80" fill="none">
+              <ellipse cx="40" cy="52" rx="22" ry="18" fill="#f0ead8"/>
+              <ellipse cx="50" cy="54" rx="12" ry="8" fill="#e0d8c4" transform="rotate(-10 50 54)"/>
+              <ellipse cx="34" cy="38" rx="9" ry="12" fill="#f0ead8"/>
+              <circle cx="32" cy="27" r="12" fill="#f0ead8"/>
+              <!-- Closed eyes -->
+              <path d="M28 24 Q32 22 36 24" stroke="#1a1a1a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+              <path d="M44 26 L50 24 L49 28 L44 27Z" fill="#e8921a"/>
+              <path d="M26 34 Q34 38 42 34 Q40 42 34 44 Q28 42 26 34Z" fill="#6a8a3a"/>
+              <!-- zzz -->
+              <text x="56" y="20" font-size="10" fill="rgba(123,175,212,0.7)" font-family="serif">z</text>
+              <text x="62" y="14" font-size="8" fill="rgba(123,175,212,0.5)" font-family="serif">z</text>
+            </svg>
+            <div style="font-family:'Lora',serif;font-size:16px;color:var(--cream);margin-bottom:4px">Sleep logged</div>
+            <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px" id="timer-summary"></div>
+          </div>
+          <div class="frow">
+            <div class="flbl"><strong>How did it go?</strong></div>
+            <div class="settle-btns">
+              <button class="sbtn" id="tm-good" onclick="setTimerMood('good')">😊 Good</button>
+              <button class="sbtn" id="tm-ok" onclick="setTimerMood('ok')">😐 OK</button>
+              <button class="sbtn" id="tm-hard" onclick="setTimerMood('hard')">😤 Hard</button>
+            </div>
+          </div>
+          <div class="frow" style="margin-bottom:14px">
+            <div class="flbl"><strong>Method</strong></div>
+            <div class="settle-btns">
+              <button class="sbtn" id="tm-self" onclick="setTimerMethod('self')">Self-settled</button>
+              <button class="sbtn" id="tm-pat" onclick="setTimerMethod('pat')">Pat/shush</button>
+              <button class="sbtn" id="tm-rock" onclick="setTimerMethod('rock')">Rocked</button>
+            </div>
+          </div>
+          <button class="add-btn" onclick="saveTimerLog()">Save to log ✓</button>
+          <button class="timer-cancel-btn" onclick="discardTimer()" style="margin-top:8px">Discard</button>
+        </div>
+      </div>
+
+      <!-- Manual log -->
+      <button class="toggle-link" id="manual-toggle" onclick="toggleManualLog()">✏️ Log manually / retrospectively →</button>
+      <div id="manual-panel" style="display:none">
+        <div class="card">
+          <div class="ct">✏️ Manual log</div>
+          <div class="frow">
+            <div class="flbl"><strong>Date</strong></div>
+            <input type="date" id="log-date">
+          </div>
+          <div class="frow">
+            <div class="flbl"><strong>Type</strong></div>
+            <div class="type-btns">
+              <button class="tbtn nap-on" id="type-nap" onclick="setType('nap')">Nap</button>
+              <button class="tbtn" id="type-night" onclick="setType('night')">Night</button>
+            </div>
+          </div>
+          <div class="frow">
+            <div class="flbl"><strong>Went down</strong></div>
+            <input type="time" id="log-start">
+          </div>
+          <div class="frow">
+            <div class="flbl"><strong>Woke up</strong></div>
+            <input type="time" id="log-end">
+          </div>
+          <div class="frow">
+            <div class="flbl"><strong>Settle time</strong><span style="font-size:11px;color:var(--muted)"> mins</span></div>
+            <input type="number" id="log-settle" min="0" max="120" placeholder="15">
+          </div>
+          <div class="frow">
+            <div class="flbl"><strong>How did it go?</strong></div>
+            <div class="settle-btns">
+              <button class="sbtn" id="m-good" onclick="setMood('good')">😊 Good</button>
+              <button class="sbtn" id="m-ok" onclick="setMood('ok')">😐 OK</button>
+              <button class="sbtn" id="m-hard" onclick="setMood('hard')">😤 Hard</button>
+            </div>
+          </div>
+          <div class="frow" style="margin-bottom:0">
+            <div class="flbl"><strong>Method</strong></div>
+            <div class="settle-btns">
+              <button class="sbtn" id="m-self" onclick="setMethod('self')">Self-settled</button>
+              <button class="sbtn" id="m-pat" onclick="setMethod('pat')">Pat/shush</button>
+              <button class="sbtn" id="m-rock" onclick="setMethod('rock')">Rocked</button>
+            </div>
+          </div>
+          <button class="add-btn" onclick="addLog()" style="margin-top:14px">Save log entry</button>
+        </div>
+      </div>
+
+      <!-- Today's log -->
+      <div class="card">
+        <div class="ct">📋 Today's log</div>
+        <div id="log-list"><div class="empty"><span class="eico">🦆</span>Nothing logged yet today.<br>Start the timer or log manually.</div></div>
+      </div>
+
+      <!-- Coach murmur -->
+      <div id="murmur-box" class="murmur" style="display:none"></div>
+    </div>
+
+    <!-- ═══════════════════════════════ PLAN ═══════════════════════════════ -->
+    <div class="sec" id="tab-plan">
+      <div class="sec-lbl">Vaughan's plan</div>
+      <div class="phase-tabs">
+        <button class="ptab active" onclick="showPhase('schedule',this)">Schedule</button>
+        <button class="ptab" onclick="showPhase('naps',this)">Nap method</button>
+        <button class="ptab" onclick="showPhase('bedtime',this)">Bedtime</button>
+        <button class="ptab" onclick="showPhase('rules',this)">The rules</button>
+      </div>
+
+      <!-- SCHEDULE -->
+      <div id="phase-schedule">
+        <div class="tip"><strong>No rigid timetable.</strong> Your life doesn't allow it. Pick today's shape, enter wake time, get a plan that fits the actual day.</div>
+        <div class="card">
+          <div class="ct">☀️ Today's wake-up</div>
+          <div class="frow" style="margin-bottom:0">
+            <div class="flbl"><strong>Vaughan woke at</strong></div>
+            <input type="time" id="sched-wake" oninput="buildSchedule()">
+          </div>
+        </div>
+        <div class="sec-lbl">What kind of day?</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px">
+          <button class="day-type-btn active" data-type="normal" onclick="selectDayType('normal',this)">🏠 Normal home day</button>
+          <button class="day-type-btn" data-type="church-morning" onclick="selectDayType('church-morning',this)">⛪ Church morning<span>Sat 11am / Sun AM</span></button>
+          <button class="day-type-btn" data-type="church-evening" onclick="selectDayType('church-evening',this)">🌆 Church evening<span>Mon / Wed / Fri</span></button>
+          <button class="day-type-btn" data-type="thursday" onclick="selectDayType('thursday',this)">🍽️ Thursday dinner<span>Grandparents, late home</span></button>
+          <button class="day-type-btn" data-type="family-lunch" onclick="selectDayType('family-lunch',this)">👨‍👩‍👧 Family lunch<span>Home by mid-afternoon</span></button>
+          <button class="day-type-btn" data-type="family-tea" onclick="selectDayType('family-tea',this)">🌇 Family tea<span>Out all evening</span></button>
+          <button class="day-type-btn" data-type="sunday-early" onclick="selectDayType('sunday-early',this)" style="grid-column:span 2">🌅 Sunday — supper service (5:40am start)</button>
+        </div>
+        <div class="card">
+          <div class="ct">📅 <span id="sched-title">Your plan for today</span></div>
+          <div id="sched-rows"><div class="empty" style="padding:12px 0"><span class="eico">👆</span>Enter wake time and pick a day type above</div></div>
+        </div>
+        <div id="sched-notes"></div>
+      </div>
+
+      <!-- NAP METHOD -->
+      <div id="phase-naps" style="display:none">
+        <div class="phase-badge">Nap settling method</div>
+        <div class="tip"><strong>Why CIO doesn't work for naps:</strong> Nap sleep pressure is weaker than night. Vaughan will scream indefinitely. Use structured check-in instead — you're present, but not rocking.</div>
+        <div class="card">
+          <div class="ct">😴 The nap method</div>
+          <ul class="steps">
+            <li><div class="snum">1</div><div>Cot, duck &amp; bunny in. Say "Sleep time, I love you." Leave.</div></li>
+            <li><div class="snum">2</div><div>Wait <strong>5 minutes</strong>. The pauses in his crying are settling attempts — going in during a pause resets him.</div></li>
+            <li><div class="snum">3</div><div>If still crying: go in, pat only, 2 mins, leave. Keep it boring.</div></li>
+            <li><div class="snum">4</div><div>Wait <strong>7 minutes</strong> → check-in. Wait <strong>10 minutes</strong> → check-in.</div></li>
+            <li><div class="snum">5</div><div>After 30 mins total with no sleep — <strong>rescue the nap.</strong> Rock to drowsy, put down. Not failure. The cap.</div></li>
+            <li><div class="snum">6</div><div>Early wake? Hit the "woken early" button on the timer. App guides you through what to do.</div></li>
+          </ul>
+        </div>
+        <div class="tip green"><strong>His superpower:</strong> Vaughan sucks fingers, grabs duck, rolls around. He's already trying to self-settle. He just needs the runway.</div>
+        <div class="tip red"><strong>One rocked nap ≠ failure.</strong> Three in a row undoes the week.</div>
+      </div>
+
+      <!-- BEDTIME -->
+      <div id="phase-bedtime" style="display:none">
+        <div class="phase-badge">Bedtime settling</div>
+        <div class="tip"><strong>CIO works for nights.</strong> We're tightening the structure so it's not open-ended.</div>
+        <div class="card">
+          <div class="ct">🌙 Bedtime — the structure</div>
+          <ul class="steps">
+            <li><div class="snum">1</div><div>Routine: nappy, sleep sack, milk (lights on, keep awake), 2 songs, "sleep time", duck &amp; bunny. <strong>Put down drowsy but awake.</strong></div></li>
+            <li><div class="snum">2</div><div>Leave room. <strong>Hard cap: 30 minutes.</strong> Biggest change from what you've been doing.</div></li>
+            <li><div class="snum">3</div><div>30 mins: brief check-in (2 mins, pat only). Then another 15 minutes.</div></li>
+            <li><div class="snum">4</div><div>45 mins: pick up to calm only — not to sleep — back down drowsy.</div></li>
+            <li><div class="snum">5</div><div><strong>Transfer fix:</strong> stop rocking to fully asleep. Rock to heavy-eyed, put down while still slightly conscious.</div></li>
+          </ul>
+        </div>
+        <div class="tip"><strong>Week 1:</strong> 20–40 mins. <strong>Week 2:</strong> 10–20 mins. <strong>Week 3:</strong> 5–10 min grizzle. Corner turns around night 4–6.</div>
+      </div>
+
+      <!-- RULES -->
+      <div id="phase-rules" style="display:none">
+        <div class="tip red"><strong>Rule 1 — 5am:</strong> No parental bed after 5am. Resettle in cot. If won't settle, 6am is an acceptable start.</div>
+        <div class="tip red"><strong>Rule 2 — No ladder:</strong> Pat → rock → feed rewards persistence. Pick one method per wake-up. No escalation.</div>
+        <div class="tip brown"><strong>Rule 3 — White noise in the room</strong> (not hallway). Continuous, moderate volume. Reduces startle wakes.</div>
+        <div class="tip brown"><strong>Rule 4 — Cap nap 2 at 3pm.</strong> Sleep after 3pm eats into night pressure. Grumpy afternoon &gt; 9pm bedtime battle.</div>
+        <div class="tip green"><strong>Rule 5 — Consistency beats perfection.</strong> One bad night doesn't break it. Three inconsistent days does.</div>
+        <div class="tip green"><strong>Rule 6 — Bernadette's sanity matters.</strong> One free pass night per week is fine. Sleep training with a depleted parent doesn't work.</div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════ NIGHTS ═══════════════════════════════ -->
+    <div class="sec" id="tab-nights">
+      <div class="sec-lbl">Night wake decision tree</div>
+      <div class="tip">Use this at 3am when your brain isn't working. Find your time. Follow the action. Don't improvise.</div>
+      <div class="dtree">
+        <div class="dtrow header"><div class="dt-time">Time</div><div class="dt-ico"></div><div class="dt-action">What to do</div></div>
+        <div class="dtrow"><div class="dt-time">7–10pm</div><div class="dt-ico">🤫</div><div class="dt-action">Wait 10 mins first. Pat in cot only, 2 mins, leave. Repeat once. No pick up, no feed.</div></div>
+        <div class="dtrow"><div class="dt-time">10pm–1am</div><div class="dt-ico">🤲</div><div class="dt-action">Pat in cot. Not settled in 5 mins: pick up to calm, back down drowsy. No feed unless 4h+ since last.</div></div>
+        <div class="dtrow"><div class="dt-time">1am–4am</div><div class="dt-ico">🍼</div><div class="dt-action">If 4h+ since last feed: feed, back to cot. Under 4h: pat/pick up to calm, no feed.</div></div>
+        <div class="dtrow"><div class="dt-time">4–5am</div><div class="dt-ico">🤲</div><div class="dt-action">Resettle in cot — pat, shush, pick up to calm. Hold the line. Don't bring to bed.</div></div>
+        <div class="dtrow"><div class="dt-time" style="color:var(--coral)">After 5am</div><div class="dt-ico">⚠️</div><div class="dt-action"><strong style="color:var(--coral)">No parental bed.</strong> Happy: leave until 6am. Distressed: resettle in cot only.</div></div>
+        <div class="dtrow"><div class="dt-time" style="color:var(--green)">6am+</div><div class="dt-ico">☀️</div><div class="dt-action">Start of day. Up, feed, begin wake window countdown.</div></div>
+      </div>
+      <div class="card">
+        <div class="ct">📊 Night wake log</div>
+        <div id="night-log-list"><div class="empty" style="padding:12px 0"><span class="eico" style="font-size:18px">💤</span>No wakes logged</div></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input type="time" id="wake-time" style="flex:1">
+          <button class="add-btn" style="width:auto;padding:10px 16px;font-size:12px;margin-top:0" onclick="logNightWake()">Log wake</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct">💡 Why nights are different</div>
+        <p style="font-size:12.5px;line-height:1.7;color:rgba(237,232,220,.75)">Night sleep is driven by circadian rhythm and sleep debt — Vaughan's body is chemically primed for sleep by 7pm in a way it simply isn't at nap time. This is why CIO works at night but fails for naps. The biology is doing most of the work. Your job is not to interfere with it.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════ COACH ═══════════════════════════════ -->
+    <div class="sec" id="tab-coach">
+      <div class="sec-lbl">Ask the coach anything</div>
+      <div class="tip"><strong>Built for 3am curveballs.</strong> The coach knows Vaughan's history and your logged data. Ask anything specific.</div>
+      <div class="sec-lbl">Quick questions</div>
+      <div class="curveball-row">
+        <button class="cbtn" onclick="askQuick('Dinner ran late and it\'s now 8:30pm. What do I do for bedtime?')">🍽️ Dinner ran late</button>
+        <button class="cbtn" onclick="askQuick('He\'s been crying for 45 minutes and still hasn\'t settled. What do I do?')">😭 45 mins crying</button>
+        <button class="cbtn" onclick="askQuick('He seems to be getting worse after 5 days. Is the plan failing?')">📉 Not improving</button>
+        <button class="cbtn" onclick="askQuick('He woke at 5am and is wide awake and happy. What do I do?')">🌅 5am wake</button>
+        <button class="cbtn" onclick="askQuick('He seems unwell — runny nose, grizzly. Should I still sleep train?')">🤒 He\'s sick</button>
+        <button class="cbtn" onclick="askQuick('Bernadette is completely exhausted and at breaking point. What\'s the priority right now?')">😮‍💨 I\'ve hit a wall</button>
+        <button class="cbtn" onclick="askQuick('Visitors tonight, can\'t let him cry. Best approach?')">👨‍👩‍👧 Visitors tonight</button>
+        <button class="cbtn" onclick="askQuick('He self-settled for the first time! What should I do differently now?')">🎉 First self-settle!</button>
+        <button class="cbtn" onclick="askQuick('It\'s Thursday at 9pm, we\'re at the grandparents and he\'s overtired and wired. What do I do?')">🕘 Late at grandparents</button>
+        <button class="cbtn" onclick="askQuick('Family lunch, pram nap happened, it\'s 3pm and we\'re not home yet. How do I manage?')">🍽️ Pram nap day</button>
+        <button class="cbtn" onclick="askQuick('It\'s Sunday, we started at 5:40am. He\'s a mess. Survival mode — what\'s the priority?')">🌅 Sunday survival</button>
+        <button class="cbtn" onclick="askQuick('We just got home at 11pm and Vaughan is still awake. What do I do?')">🌙 Home at 11pm</button>
+      </div>
+      <div class="ask-area">
+        <textarea id="coach-input" placeholder="Ask anything… 'nap only 20 mins', 'he's teething', 'we're going away'…" rows="3"></textarea>
+        <div class="ask-row">
+          <button class="clear-btn" onclick="clearCoach()">Clear</button>
+          <button class="ask-btn" id="ask-submit" onclick="askCoach()">Ask coach 🦆</button>
+        </div>
+      </div>
+      <div id="coach-out"></div>
+    </div>
+
+    <!-- ═══════════════════════════════ PROGRESS ═══════════════════════════════ -->
+    <div class="sec" id="tab-progress">
+      <div class="sec-lbl">This week</div>
+      <div class="week-grid" id="week-grid"></div>
+
+      <!-- Family & account -->
+      <div class="card">
+        <div class="ct">👨‍👩‍👧 Family account</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Share this code with your partner so they can join on their phone:</div>
+        <div style="font-family:'Lora',serif;font-size:28px;color:var(--blue2);letter-spacing:5px;text-align:center;padding:10px;background:var(--faint);border-radius:10px;margin-bottom:10px" id="invite-display">——</div>
+        <div style="font-size:11.5px;color:var(--muted);text-align:center;margin-bottom:14px">They tap "Create account" → enter this code → instant sync</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Signed in as: <span style="color:var(--text)" id="user-display">—</span></div>
+        <button onclick="signOut()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12.5px;cursor:pointer">Sign out</button>
+      </div>
+
+      <div class="card">
+        <div class="ct">📈 Key metrics</div>
+        <div class="prog-row"><div class="prog-lbl"><span>Self-settle rate (naps)</span><span id="pr-self">0%</span></div><div class="prog-track"><div class="prog-fill pf-blue" id="pb-self" style="width:0%"></div></div></div>
+        <div class="prog-row"><div class="prog-lbl"><span>Nights with 0–1 wakes</span><span id="pr-nights">0%</span></div><div class="prog-track"><div class="prog-fill pf-green" id="pb-nights" style="width:0%"></div></div></div>
+        <div class="prog-row"><div class="prog-lbl"><span>Avg settle time (mins)</span><span id="pr-settle">—</span></div><div class="prog-track"><div class="prog-fill pf-brown" id="pb-settle" style="width:0%"></div></div></div>
+      </div>
+      <div class="card">
+        <div class="ct">🎯 What to expect</div>
+        <ul class="steps">
+          <li><div class="snum">W1</div><div><strong>Days 1–3:</strong> Often gets harder before better. Vaughan will escalate because the old system isn't working. Hold the line.</div></li>
+          <li><div class="snum">W1</div><div><strong>Days 4–6:</strong> First signs. Settling shortens. Possible first self-settle. Night waking may reduce.</div></li>
+          <li><div class="snum">W2</div><div><strong>Days 7–10:</strong> Clearer pattern. Most nights 0–1 wakes. Nap settling under 15 mins on good days.</div></li>
+          <li><div class="snum done">W3</div><div><strong>Days 14–21:</strong> The new normal. Under 10 mins most sleeps. Sleeping through most nights. Duck doing real work.</div></li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="ct">🏅 Wins</div>
+        <div id="wins-list"><div class="empty" style="padding:12px 0"><span class="eico" style="font-size:18px">⭐</span>No wins yet. Timer logs them automatically.</div></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input type="text" id="win-input" placeholder="Add a win…" style="flex:1">
+          <button class="add-btn" style="width:auto;padding:10px 16px;font-size:12px;margin-top:0" onclick="addWin()">Add</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// SUPABASE
+// ═══════════════════════════════════════════════════════════
+const SUPA_URL='https://fewucfjtavgnlgxejiyo.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZld3VjZmp0YXZnbmxneGVqaXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODEzODAsImV4cCI6MjA4OTY1NzM4MH0.rGYyGCuVwXpfIMGLm_n5rHnIwgC2BDC8OD7g7B8ATFo';
+const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+// Auth state listener — this is the single entry point
+sb.auth.onAuthStateChange(async(event,session)=>{
+  if(session?.user){currentUser=session.user;await initApp();}
+  else{el('loading-screen').style.display='none';el('main-app').style.display='none';el('auth-screen').style.display='flex';showAuth('signin');}
+});
+
+// ═══════════════════════════════════════════════════════════
+// APP STATE (cloud-backed — no localStorage)
+// ═══════════════════════════════════════════════════════════
+let currentUser=null,familyId=null,napMode=2;
+let logs=[],nightLogs=[],wins=[],dayRatings={};
+let currentType='nap',currentMood=null,currentMethod=null;
+let currentDayType='normal';
+
+function setSyncDot(s){const d=el('sync-dot');if(!d)return;d.className='sync-dot'+(s==='syncing'?' syncing':s==='error'?' error':'');}
+
+// ═══════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════
+function showAuth(mode){
+  el('auth-signin').style.display=mode==='signin'?'block':'none';
+  el('auth-signup').style.display=mode==='signup'?'block':'none';
+  el('auth-invite').style.display='none';
+  el('signin-error').textContent='';if(el('signup-error'))el('signup-error').textContent='';
+}
+
+async function signIn(){
+  const email=el('signin-email').value.trim(),password=el('signin-password').value;
+  if(!email||!password){el('signin-error').textContent='Enter email and password.';return;}
+  el('signin-error').textContent='Signing in…';
+  const{error}=await sb.auth.signInWithPassword({email,password});
+  if(error){el('signin-error').textContent=error.message;}
+}
+
+async function signUp(){
+  const name=el('signup-name').value.trim(),email=el('signup-email').value.trim();
+  const password=el('signup-password').value,invite=el('signup-invite').value.trim().toLowerCase();
+  if(!name||!email||!password){el('signup-error').textContent='Fill in all fields.';return;}
+  if(password.length<6){el('signup-error').textContent='Password min 6 characters.';return;}
+  el('signup-error').textContent='Creating account…';
+  const{data,error}=await sb.auth.signUp({email,password,options:{data:{full_name:name}}});
+  if(error){el('signup-error').textContent=error.message;return;}
+  const uid=data.user.id;
+  if(invite){
+    // Join existing family by invite code (first 6 chars of UUID)
+    const{data:fams}=await sb.from('families').select('id').ilike('id',invite+'%').limit(1);
+    if(fams&&fams.length){
+      familyId=fams[0].id;
+      await sb.from('family_members').insert({family_id:familyId,user_id:uid});
+      el('signup-error').textContent='';showToast('Joined family! Welcome 🦆');
+    } else {el('signup-error').textContent='Invite code not found. Check with your partner.';return;}
+  } else {
+    const{data:fam,error:fe}=await sb.from('families').insert({baby_name:'Vaughan',baby_dob:'2025-09-03'}).select().single();
+    if(fe){el('signup-error').textContent='Error creating family: '+fe.message;return;}
+    familyId=fam.id;
+    await sb.from('family_members').insert({family_id:familyId,user_id:uid});
+    await sb.from('family_settings').insert({family_id:familyId,nap_mode:2});
+    // Show invite code
+    const code=familyId.substring(0,6);
+    el('invite-display').textContent=code;
+    el('auth-signup').style.display='none';
+    el('auth-invite').style.display='block';
+  }
+}
+
+function copyInvite(){
+  const code=el('invite-display').textContent;
+  navigator.clipboard.writeText(code).then(()=>showToast('Invite code copied!')).catch(()=>showToast('Code: '+code));
+}
+
+async function enterApp(){el('auth-screen').style.display='none';await initApp();}
+
+async function signOut(){
+  await sb.auth.signOut();currentUser=null;familyId=null;
+  el('main-app').style.display='none';
+  el('auth-screen').style.display='flex';showAuth('signin');
+}
+
+// (initApp defined above)
+
+// ═══════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════
+async function loadAllData(){
+  const week=new Date(Date.now()-8*24*3600*1000).toISOString().split('T')[0];
+  const[{data:sl},{data:nw},{data:w},{data:dr}]=await Promise.all([
+    sb.from('sleep_logs').select('*').eq('family_id',familyId).gte('log_date',week).order('log_date',{ascending:false}).order('start_time',{ascending:false}),
+    sb.from('night_wakes').select('*').eq('family_id',familyId).gte('wake_date',week).order('wake_date',{ascending:false}),
+    sb.from('wins').select('*').eq('family_id',familyId).order('created_at',{ascending:false}).limit(25),
+    sb.from('day_ratings').select('*').eq('family_id',familyId)
+  ]);
+  logs=(sl||[]).map(r=>({
+    id:r.id,
+    date:new Date(r.log_date+'T12:00:00').toDateString(),
+    type:r.type,
+    start:r.start_time?r.start_time.substring(0,5):'',
+    end:r.end_time?r.end_time.substring(0,5):'',
+    settle:r.settle_mins||0,
+    mood:r.mood,
+    method:r.method,
+    duration:r.duration_mins
+  }));
+  nightLogs=(nw||[]).map(r=>({
+    id:r.id,
+    time:r.wake_time?r.wake_time.substring(0,5):'',
+    date:new Date(r.wake_date+'T12:00:00').toDateString(),
+    dur:r.duration_mins
+  }));
+  wins=(w||[]).map(r=>({
+    id:r.id,
+    text:r.text,
+    date:new Date(r.created_at).toLocaleString('en-AU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+  }));
+  dayRatings={};(dr||[]).forEach(r=>{
+    dayRatings[new Date(r.rating_date+'T12:00:00').toDateString()]=r.rating;
+  });
+}
+
+function subscribeToChanges(){
+  sb.channel('fam-'+familyId)
+    .on('postgres_changes',{event:'*',schema:'public',table:'sleep_logs',filter:'family_id=eq.'+familyId},async()=>{setSyncDot('syncing');await loadAllData();renderLogs();updateStats();setSyncDot('synced');})
+    .on('postgres_changes',{event:'*',schema:'public',table:'night_wakes',filter:'family_id=eq.'+familyId},async()=>{await loadAllData();renderNightLogs();updateStats();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'wins',filter:'family_id=eq.'+familyId},async()=>{await loadAllData();renderWins();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'day_ratings',filter:'family_id=eq.'+familyId},async()=>{await loadAllData();renderWeekGrid();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'family_settings',filter:'family_id=eq.'+familyId},async(p)=>{
+      if(p.new&&p.new.nap_mode){napMode=p.new.nap_mode;setNapModeUI(napMode);buildSchedule();}
+    })
+    .subscribe();
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+async function initApp(){
+  el('loading-screen').style.display='flex';
+  el('auth-screen').style.display='none';
+  el('main-app').style.display='none';
+  if(!familyId){
+    const{data:members}=await sb.from('family_members').select('family_id').eq('user_id',currentUser.id).limit(1);
+    if(members&&members.length)familyId=members[0].family_id;
+  }
+  if(!familyId){
+    el('loading-screen').style.display='none';
+    el('auth-screen').style.display='flex';showAuth('signup');return;
+  }
+  const{data:settings}=await sb.from('family_settings').select('nap_mode').eq('family_id',familyId).single();
+  if(settings)napMode=settings.nap_mode||2;
+  await loadAllData();
+  subscribeToChanges();
+  // Set invite code (first 6 chars of family UUID, no dashes)
+  const code=familyId.replace(/-/g,'').substring(0,6).toUpperCase();
+  if(el('invite-display'))el('invite-display').textContent=code;
+  // Set user name in header
+  const name=currentUser.user_metadata?.full_name||currentUser.email.split('@')[0];
+  if(el('user-display'))el('user-display').textContent=name.split(' ')[0];
+  el('loading-screen').style.display='none';
+  el('main-app').style.display='flex';
+  setNapModeUI(napMode);
+  calcAge();setDates();
+  renderLogs();renderNightLogs();renderWins();renderWeekGrid();updateStats();
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUDIO — louder gentle baby chimes
+// ═══════════════════════════════════════════════════════════
+let audioCtx=null;
+function getAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
+function playChime(urgent){
+  try{
+    const ctx=getAudio();
+    if(ctx.state==='suspended')ctx.resume();
+    const notes=urgent?[523.25,659.25,783.99,1046.5,783.99]:[783.99,659.25,523.25];
+    const vol=urgent?0.55:0.42;
+    notes.forEach((freq,i)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.type='sine';osc.frequency.value=freq;
+      const t=ctx.currentTime+i*0.3;
+      gain.gain.setValueAtTime(0,t);
+      gain.gain.linearRampToValueAtTime(vol,t+0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001,t+1.6);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(t);osc.stop(t+1.8);
+    });
+  }catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════
+// WAKE LOCK
+// ═══════════════════════════════════════════════════════════
+let wl=null;
+async function reqWL(){try{if('wakeLock'in navigator)wl=await navigator.wakeLock.request('screen');}catch(e){}}
+function relWL(){if(wl){wl.release();wl=null;}}
+
+// ═══════════════════════════════════════════════════════════
+// TIMER
+// ═══════════════════════════════════════════════════════════
+const T={mode:'idle',type:'nap',settleStart:null,sleepStart:null,earlyWakeStart:null,wakeTime:null,timerMood:null,timerMethod:null,iv:null,ewIv:null};
+const CHECK_INS=[
+  {at:5,  msg:'Check-in time. Go in, pat only, 2 mins, then leave.',urgent:false},
+  {at:14, msg:'Second check-in. Pat, shush, out in 2 mins.',urgent:false},
+  {at:25, msg:'Third check-in. Same again. Keep it boring.',urgent:false},
+  {at:30, msg:'30 minutes — rescue the nap now. Rock to drowsy.',urgent:true}
+];
+let lastCI=-1;
+
+function startTimer(type){
+  T.type=type;T.settleStart=Date.now();T.sleepStart=null;T.earlyWakeStart=null;T.wakeTime=null;
+  T.timerMood=null;T.timerMethod=null;lastCI=-1;
+  getAudio(); // unlock
+  reqWL();
+  T.mode=type==='nap'?'settling':'nightwake';
+  showTS(T.mode);
+  T.iv=setInterval(tickTimer,500);
+}
+
+function tickTimer(){
+  const now=Date.now();
+  if(T.mode==='settling'){
+    const secs=Math.floor((now-T.settleStart)/1000);
+    el('settle-display').textContent=fmtSecs(secs);
+    // show give-up btn after 10 mins
+    el('btn-notworking').style.display=secs>600?'block':'none';
+    const ni=lastCI+1;
+    if(ni<CHECK_INS.length){
+      const next=CHECK_INS[ni];
+      const sTN=next.at*60-secs;
+      if(sTN<=0){
+        lastCI=ni;playChime(next.urgent);
+        el('checkin-msg').textContent=next.msg;
+        el('checkin-msg').className='checkin-msg checkin-active';
+        el('checkin-countdown').textContent='';
+      } else if(sTN<=60){
+        el('checkin-countdown').textContent='Next check-in in '+sTN+'s';
+        el('checkin-msg').className='checkin-msg';
+      } else {
+        const m=Math.floor(sTN/60),s=sTN%60;
+        el('checkin-countdown').textContent='Next check-in in '+m+':'+String(s).padStart(2,'0');
+        el('checkin-msg').className='checkin-msg';
+      }
+    } else el('checkin-countdown').textContent='';
+  } else if(T.mode==='sleeping'){
+    const secs=Math.floor((now-T.sleepStart)/1000);
+    el('sleep-display').textContent=fmtSecs(secs);
+  } else if(T.mode==='nightwake'){
+    el('nightwake-display').textContent=fmtSecs(Math.floor((now-T.settleStart)/1000));
+  }
+}
+
+function earlyWakeTickTimer(){
+  if(!T.earlyWakeStart)return;
+  const secs=Math.floor((Date.now()-T.earlyWakeStart)/1000);
+  el('earlywake-display').textContent=fmtSecs(secs);
+  const sleptMins=T.sleepStart?Math.round((T.earlyWakeStart-T.sleepStart)/60000):0;
+  // show resettled btn after 5 min wait
+  if(secs>=300&&sleptMins<40){
+    el('btn-resettled').style.display='block';
+    el('earlywake-countdown').textContent='5 mins is up — check on him now.';
+  } else if(secs<300){
+    const rem=300-secs;
+    el('earlywake-countdown').textContent='Wait '+rem+'s before going in. He may resettle.';
+  }
+}
+
+function markAsleep(){
+  T.sleepStart=Date.now();T.mode='sleeping';
+  const sm=Math.round((T.sleepStart-T.settleStart)/60000);
+  el('settled-label').textContent='Settled in '+sm+' min'+(sm!==1?'s':'');
+  showTS('sleeping');playChime(false);
+}
+
+function earlyWake(){
+  clearInterval(T.iv);
+  T.earlyWakeStart=Date.now();T.mode='earlywake';
+  const sleptMins=T.sleepStart?Math.round((T.earlyWakeStart-T.sleepStart)/60000):0;
+  el('earlywake-slept').textContent='Slept '+sleptMins+' mins so far';
+  el('btn-resettled').style.display='none';
+  let advice='';
+  if(sleptMins<15) advice='He\'s barely slept. Wait 5 minutes before going in — he might grizzle and resettle. Only intervene if he\'s properly distressed.';
+  else if(sleptMins<35) advice='Short nap. Give him 5 minutes — babies often stir between sleep cycles and can link them. The pause is him trying to go back.';
+  else advice='He\'s had a reasonable nap. Give it 5 minutes anyway — if he\'s quiet, he may drift back. If properly awake and cheerful, get him up.';
+  el('earlywake-advice').textContent=advice;
+  showTS('earlywake');
+  T.ewIv=setInterval(earlyWakeTickTimer,500);
+}
+
+function resettled(){
+  clearInterval(T.ewIv);
+  // back to sleeping state — he went back to sleep!
+  T.sleepStart=T.sleepStart; // keep original sleep start
+  T.mode='sleeping';
+  T.earlyWakeStart=null;
+  showTS('sleeping');
+  T.iv=setInterval(tickTimer,500);
+  showToast('Nice — he resettled! Timer continues 🎉');
+}
+
+function confirmEarlyAwake(){
+  clearInterval(T.ewIv);
+  T.wakeTime=Date.now();
+  clearInterval(T.iv);
+  T.mode='complete';relWL();showTimerComplete();
+}
+
+function markAwake(){
+  T.wakeTime=Date.now();clearInterval(T.iv);T.mode='complete';relWL();showTimerComplete();
+}
+
+function napNotWorking(){
+  T.wakeTime=Date.now();clearInterval(T.iv);T.mode='complete';relWL();showTimerComplete();
+}
+
+async function endNightWake(){
+  T.wakeTime=Date.now();clearInterval(T.iv);relWL();
+  const dur=Math.round((T.wakeTime-T.settleStart)/60000);
+  const wakeDate=new Date(T.settleStart).toISOString().split('T')[0];
+  setSyncDot('syncing');
+  await sb.from('night_wakes').insert({family_id:familyId,wake_date:wakeDate,wake_time:fmtHHMM(T.settleStart)+':00',duration_mins:dur});
+  setSyncDot('synced');
+  showTS('idle');showToast('Night wake logged — '+dur+' mins');
+}
+
+function cancelTimer(){
+  clearInterval(T.iv);clearInterval(T.ewIv);T.mode='idle';relWL();lastCI=-1;showTS('idle');
+}
+
+function showTS(state){
+  ['idle','settling','sleeping','earlywake','nightwake','complete'].forEach(s=>{
+    const e=el('ts-'+s);if(e)e.style.display=s===state?'block':'none';
+  });
+}
+
+function showTimerComplete(){
+  const settleSecs=T.sleepStart?Math.floor((T.sleepStart-T.settleStart)/1000):Math.floor((T.wakeTime-T.settleStart)/1000);
+  const sleepSecs=T.sleepStart&&T.wakeTime?Math.floor((T.wakeTime-T.sleepStart)/1000):0;
+  const sm=Math.round(settleSecs/60);
+  const slm=Math.round(sleepSecs/60);
+  const slStr=slm>=60?Math.floor(slm/60)+'h '+(slm%60)+'m':slm+'m';
+  let summary='Settled in '+sm+'m';
+  if(sleepSecs>0)summary+=' · Slept '+slStr;
+  el('timer-summary').textContent=summary;
+  showTS('complete');
+}
+
+function fmtSecs(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h>0?h+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'):m+':'+String(sec).padStart(2,'0');}
+function fmtHHMM(ts){const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+function setTimerMood(m){T.timerMood=m;['good','ok','hard'].forEach(x=>{el('tm-'+x).className='sbtn'+(x===m?' on':'');});}
+function setTimerMethod(m){T.timerMethod=m;['self','pat','rock'].forEach(x=>{el('tm-'+x).className='sbtn'+(x===m?' on':'');});}
+
+async function saveTimerLog(){
+  const startTs=T.settleStart,endTs=T.wakeTime;
+  const settleMin=T.sleepStart?Math.round((T.sleepStart-startTs)/60000):Math.round((endTs-startTs)/60000);
+  const durMins=T.sleepStart?Math.round((endTs-T.sleepStart)/60000):0;
+  const logDate=new Date(startTs).toISOString().split('T')[0];
+  setSyncDot('syncing');
+  const{error}=await sb.from('sleep_logs').insert({
+    family_id:familyId,created_by:currentUser.id,
+    log_date:logDate,type:T.type==='nap'?'nap':'night',
+    start_time:fmtHHMM(startTs)+':00',end_time:fmtHHMM(endTs)+':00',
+    settle_mins:settleMin||null,mood:T.timerMood,method:T.timerMethod,duration_mins:durMins||null
+  });
+  if(error){setSyncDot('error');showToast('Save failed — check connection');return;}
+  setSyncDot('synced');
+  if(T.timerMethod==='self')await addWinCloud('🎉 Self-settled at '+fmtHHMM(startTs)+'!');
+  if(settleMin<=10&&settleMin>0&&T.timerMethod!=='rock')await addWinCloud('⚡ Settled in just '+settleMin+' mins at '+fmtHHMM(startTs));
+  triggerMurmur(T.timerMood,T.timerMethod,settleMin);
+  T.mode='idle';T.timerMood=null;T.timerMethod=null;showTS('idle');showToast('Sleep logged ✓');
+}
+function discardTimer(){T.mode='idle';showTS('idle');}
+
+// ═══════════════════════════════════════════════════════════
+// NAP MODE
+// ═══════════════════════════════════════════════════════════
+async function setNapMode(n){
+  napMode=n;setNapModeUI(n);buildSchedule();
+  if(familyId)await sb.from('family_settings').upsert({family_id:familyId,nap_mode:n,updated_at:new Date().toISOString()},{onConflict:'family_id'});
+}
+function setNapModeUI(n){el('nm-2').className='nm-btn'+(n===2?' active':'');el('nm-3').className='nm-btn'+(n===3?' active':'');}
+
+// ═══════════════════════════════════════════════════════════
+// AGE & DATE
+// ═══════════════════════════════════════════════════════════
+function calcAge(){
+  const dob=new Date('2025-09-03'),now=new Date();
+  const weeks=Math.floor((now-dob)/(7*24*3600*1000));
+  const months=Math.floor(weeks/4.33),rw=Math.floor(weeks-months*4.33);
+  el('baby-age').textContent=months+'m '+rw+'w';
+}
+function setDates(){
+  const now=new Date();
+  el('today-date').textContent=now.toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'short'});
+  // Set default date for manual log to today
+  const y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0'),d=String(now.getDate()).padStart(2,'0');
+  el('log-date').value=y+'-'+m+'-'+d;
+  // Set default times
+  const hh=String(now.getHours()).padStart(2,'0'),mm=String(now.getMinutes()).padStart(2,'0');
+  el('last-wake').value=hh+':'+mm;
+  el('wake-time').value=hh+':'+mm;
+  // Auto select day type
+  const dayMap={0:'sunday-early',1:'church-evening',3:'church-evening',4:'thursday',5:'church-evening',6:'church-morning'};
+  const dayType=dayMap[now.getDay()]||'normal';
+  document.querySelectorAll('.day-type-btn').forEach(b=>{b.classList.toggle('active',b.dataset.type===dayType);});
+  currentDayType=dayType;
+  // Set sched wake default to 7am
+  el('sched-wake').value='07:00';
+  buildSchedule();
+  updateWakeWindow();
+}
+
+// ═══════════════════════════════════════════════════════════
+// WAKE WINDOW CHECKER
+// ═══════════════════════════════════════════════════════════
+function updateWakeWindow(){
+  const val=el('last-wake').value;if(!val)return;
+  const[wh,wm]=val.split(':').map(Number);
+  const now=new Date(),wd=new Date(now);
+  wd.setHours(wh,wm,0);if(wd>now)wd.setDate(wd.getDate()-1);
+  const awake=Math.round((now-wd)/60000);
+  const target=150,max=180,rem=target-awake;
+  const e=el('ww-result');
+  const napLbl=napMode===3?' (3-nap day)':'';
+  if(awake<100){e.style.color='var(--blue2)';e.innerHTML='✓ Awake <strong style="color:var(--text)">'+awake+' mins</strong>. Not ready — aim for nap in <strong style="color:var(--blue)">'+rem+' mins</strong>'+napLbl+'.';}
+  else if(awake<target){e.style.color='var(--cream2)';e.innerHTML='⏳ Awake <strong style="color:var(--text)">'+awake+' mins</strong>. Getting close — <strong style="color:var(--blue)">'+rem+' mins</strong> to sweet spot'+napLbl+'.';}
+  else if(awake<=max){e.style.color='var(--green)';e.innerHTML='✅ <strong>Now is the time.</strong> Awake '+awake+' mins — 2h30m–3h window. Put him down now'+napLbl+'.';}
+  else{e.style.color='var(--coral)';e.innerHTML='⚠️ Awake <strong style="color:var(--text)">'+awake+' mins</strong>. Over 3h — likely overtired. Put him down <strong style="color:var(--coral)">immediately</strong>.';}
+}
+
+// ═══════════════════════════════════════════════════════════
+// TAB & PHASE NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function showTab(id,btn){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  el('tab-'+id).classList.add('active');btn.classList.add('active');
+}
+function showPhase(id,btn){
+  ['schedule','naps','bedtime','rules'].forEach(p=>{el('phase-'+p).style.display=p===id?'block':'none';});
+  document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════
+// MANUAL LOG FORM
+// ═══════════════════════════════════════════════════════════
+function toggleManualLog(){
+  const p=el('manual-panel'),open=p.style.display==='block';
+  p.style.display=open?'none':'block';
+  el('manual-toggle').textContent=open?'✏️ Log manually / retrospectively →':'✏️ Hide manual log ↑';
+}
+function setType(t){currentType=t;el('type-nap').className='tbtn'+(t==='nap'?' nap-on':'');el('type-night').className='tbtn'+(t==='night'?' night-on':'');}
+function setMood(m){currentMood=m;['good','ok','hard'].forEach(x=>{el('m-'+x).className='sbtn'+(x===m?' on':'');});}
+function setMethod(m){currentMethod=m;['self','pat','rock'].forEach(x=>{el('m-'+x).className='sbtn'+(x===m?' on':'');});}
+
+async function addLog(){
+  const logDate=el('log-date').value;
+  const start=el('log-start').value,end=el('log-end').value;
+  const settle=parseInt(el('log-settle').value)||0;
+  if(!start){showToast('Add a start time');return;}
+  const todayStr=new Date().toISOString().split('T')[0];
+  if(logDate===todayStr&&start){
+    const now=new Date(),[sh,sm]=start.split(':').map(Number);
+    if(sh*60+sm>now.getHours()*60+now.getMinutes()){showToast('Can\'t log a future time');return;}
+  }
+  const dur=calcDur(start,end);
+  setSyncDot('syncing');
+  const{error}=await sb.from('sleep_logs').insert({
+    family_id:familyId,created_by:currentUser.id,
+    log_date:logDate||todayStr,type:currentType,
+    start_time:start+':00',end_time:end?end+':00':null,
+    settle_mins:settle||null,mood:currentMood,method:currentMethod,duration_mins:dur
+  });
+  if(error){setSyncDot('error');showToast('Save failed — check connection');return;}
+  setSyncDot('synced');
+  if(currentMethod==='self')await addWinCloud('🎉 Self-settled at '+start+'!');
+  if(settle<=10&&settle>0&&currentMethod!=='rock')await addWinCloud('⚡ Settled in just '+settle+' mins at '+start);
+  triggerMurmur(currentMood,currentMethod,settle);
+  showToast('Sleep logged ✓');
+  el('log-settle').value='';currentMood=null;currentMethod=null;
+  ['good','ok','hard','self','pat','rock'].forEach(x=>{const e=el('m-'+x);if(e)e.className='sbtn';});
+}
+
+function calcDur(start,end){
+  if(!start||!end)return null;
+  const[sh,sm]=start.split(':').map(Number),[eh,em]=end.split(':').map(Number);
+  let m=(eh*60+em)-(sh*60+sm);if(m<0)m+=1440;return m;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER LOGS
+// ═══════════════════════════════════════════════════════════
+function renderLogs(){
+  const today=new Date().toDateString(),tl=logs.filter(l=>l.date===today);
+  const e=el('log-list');
+  if(!tl.length){e.innerHTML='<div class="empty"><span class="eico">🦆</span>Nothing logged yet today.<br>Start the timer or log manually.</div>';return;}
+  const moodMap={good:'😊',ok:'😐',hard:'😤'},methMap={self:'self-settled',pat:'pat/shush',rock:'rocked'};
+  e.innerHTML=tl.map(l=>{
+    const dur=l.duration?Math.floor(l.duration/60)+'h '+(l.duration%60)+'m':'—';
+    return'<div class="log-item"><div class="ldot ldot-'+l.type+'"></div><div class="linfo"><div class="ltype">'+(l.type==='nap'?'Nap':'Night')+' · '+l.start+(l.end?' – '+l.end:'')+'</div><div class="lmeta">'+dur+(l.settle?' · '+l.settle+'m settle':'')+(l.method?' · '+(methMap[l.method]||l.method):'')+(l.mood?' · '+(moodMap[l.mood]||''):'')+'</div></div><button class="ldel" onclick="deleteLog(\''+l.id+'\')">×</button></div>';
+  }).join('');
+}
+async function deleteLog(id){
+  setSyncDot('syncing');
+  await sb.from('sleep_logs').delete().eq('id',id);
+  setSyncDot('synced');
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════
+function updateStats(){
+  const today=new Date().toDateString(),tl=logs.filter(l=>l.date===today);
+  const naps=tl.filter(l=>l.type==='nap');
+  const totMins=tl.reduce((a,l)=>a+(l.duration||0),0);
+  const settles=tl.filter(l=>l.settle>0).map(l=>l.settle);
+  const avg=settles.length?Math.round(settles.reduce((a,b)=>a+b,0)/settles.length):null;
+  el('stat-naps').textContent=naps.length;
+  el('stat-sleep').textContent=totMins>=60?Math.floor(totMins/60)+'h'+(totMins%60?(totMins%60)+'m':''):totMins?totMins+'m':'—';
+  el('stat-settle').textContent=avg?avg+'m':'—';
+  updateProgressMetrics();
+}
+
+// ═══════════════════════════════════════════════════════════
+// NIGHT WAKES
+// ═══════════════════════════════════════════════════════════
+async function logNightWake(){
+  const t=el('wake-time').value;if(!t)return;
+  setSyncDot('syncing');
+  await sb.from('night_wakes').insert({family_id:familyId,wake_date:new Date().toISOString().split('T')[0],wake_time:t+':00'});
+  setSyncDot('synced');showToast('Night wake logged');
+}
+function renderNightLogs(){
+  const today=new Date().toDateString(),tn=nightLogs.filter(n=>n.date===today);
+  const e=el('night-log-list');
+  if(!tn.length){e.innerHTML='<div class="empty" style="padding:12px 0"><span class="eico" style="font-size:18px">💤</span>No wakes logged</div>';return;}
+  e.innerHTML=tn.map(n=>'<div class="log-item"><div class="ldot ldot-night"></div><div class="linfo"><div class="ltype">Wake at '+n.time+'</div></div><button class="ldel" onclick="deleteNightLog(\''+n.id+'\')">×</button></div>').join('');
+}
+async function deleteNightLog(id){
+  setSyncDot('syncing');await sb.from('night_wakes').delete().eq('id',id);setSyncDot('synced');
+}
+
+// ═══════════════════════════════════════════════════════════
+// WINS
+// ═══════════════════════════════════════════════════════════
+async function addWinCloud(text){
+  await sb.from('wins').insert({family_id:familyId,text});
+}
+async function addWin(){
+  const v=el('win-input').value.trim();if(!v)return;
+  await addWinCloud('⭐ '+v);el('win-input').value='';showToast('Win logged ⭐');
+}
+function renderWins(){
+  const e=el('wins-list');
+  if(!wins.length){e.innerHTML='<div class="empty" style="padding:12px 0"><span class="eico" style="font-size:18px">⭐</span>No wins yet.</div>';return;}
+  e.innerHTML=wins.map(w=>'<div class="log-item"><div class="linfo"><div class="ltype" style="font-size:12.5px">'+w.text+'</div><div class="lmeta">'+w.date+'</div></div><button class="ldel" onclick="deleteWin(\''+w.id+'\')">×</button></div>').join('');
+}
+async function deleteWin(id){
+  await sb.from('wins').delete().eq('id',id);
+}
+
+// ═══════════════════════════════════════════════════════════
+// WEEK GRID & PROGRESS
+// ═══════════════════════════════════════════════════════════
+function renderWeekGrid(){
+  const grid=el('week-grid'),days=['S','M','T','W','T','F','S'],now=new Date();
+  let html='';
+  for(let i=6;i>=0;i--){
+    const d=new Date(now);d.setDate(d.getDate()-i);
+    const key=d.toDateString(),rating=dayRatings[key],isToday=i===0;
+    html+='<div class="wday'+(rating?' '+rating:'')+(isToday?' today':'')+'" onclick="toggleDayRating(\''+key+'\')"><div class="wd-label">'+days[d.getDay()]+'</div><div class="wd-num">'+d.getDate()+'</div><div class="wd-dot"></div></div>';
+  }
+  grid.innerHTML=html;
+}
+async function toggleDayRating(key){
+  const cycle=[null,'good','mixed','bad'],current=dayRatings[key]||null;
+  const next=cycle[(cycle.indexOf(current)+1)%cycle.length];
+  const dateStr=new Date(key).toISOString().split('T')[0];
+  setSyncDot('syncing');
+  if(next){await sb.from('day_ratings').upsert({family_id:familyId,rating_date:dateStr,rating:next},{onConflict:'family_id,rating_date'});}
+  else{await sb.from('day_ratings').delete().eq('family_id',familyId).eq('rating_date',dateStr);}
+  setSyncDot('synced');
+}
+function updateProgressMetrics(){
+  const naps=logs.filter(l=>l.type==='nap'&&l.method);
+  const selfPct=naps.length?Math.round(naps.filter(l=>l.method==='self').length/naps.length*100):0;
+  const dates=[...new Set(logs.map(l=>l.date))];
+  let gn=0;dates.forEach(d=>{if(nightLogs.filter(n=>n.date===d).length<=1)gn++;});
+  const nightPct=dates.length?Math.round(gn/dates.length*100):0;
+  const settles=logs.filter(l=>l.settle>0).map(l=>l.settle);
+  const avgS=settles.length?Math.round(settles.reduce((a,b)=>a+b,0)/settles.length):0;
+  const sw=avgS?Math.max(0,Math.min(100,100-(avgS-5)*4)):0;
+  el('pr-self').textContent=selfPct+'%';el('pb-self').style.width=selfPct+'%';
+  el('pr-nights').textContent=nightPct+'%';el('pb-nights').style.width=nightPct+'%';
+  el('pr-settle').textContent=avgS?avgS+'m':'—';el('pb-settle').style.width=sw+'%';
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════
+function showToast(msg){const t=el('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+// ═══════════════════════════════════════════════════════════
+// COACH MURMUR
+// ═══════════════════════════════════════════════════════════
+async function triggerMurmur(mood,method,settle){
+  const e=el('murmur-box');
+  const recentMethods=logs.slice(0,5).map(l=>l.method);
+  const recentMoods=logs.slice(0,5).map(l=>l.mood);
+  const rockStreak=recentMethods.filter(m=>m==='rock').length;
+  const hardStreak=recentMoods.filter(m=>m==='hard').length;
+  const settles=logs.filter(l=>l.settle>0).slice(0,8).map(l=>l.settle);
+  let improving=false;
+  if(settles.length>=6){const old=settles.slice(3).reduce((a,b)=>a+b,0)/3,rec=settles.slice(0,3).reduce((a,b)=>a+b,0)/3;improving=rec<old-4;}
+  let trigger=null;
+  if(method==='self')trigger='self_settled';
+  else if(hardStreak>=3&&rockStreak>=3)trigger='three_hard';
+  else if(mood==='hard'&&method==='rock')trigger='hard_rocked';
+  else if(mood==='good'&&(settle||0)<=15)trigger='good_settle';
+  else if(improving)trigger='improving';
+  if(!trigger){e.style.display='none';return;}
+  const prompts={
+    self_settled:'Bernadette just logged that Vaughan self-settled. React with genuine warmth — midwife tone. 2 sentences max. Tell her what it means developmentally. Maybe suggest she go make a coffee.',
+    three_hard:'Bernadette has logged 3+ hard or rocked sessions in a row. Acknowledge this stretch is tough, remind her week 1 is always the hardest, one practical tip. Midwife tone. 3 sentences max. Tell her to go make a coffee or have 10 minutes to herself.',
+    hard_rocked:'Bernadette just had a hard settle and had to rock him. One sentence of honest warm encouragement. Acknowledge it was hard. Remind her one rocked nap doesn\'t break the plan. Next practical step. Max 3 sentences.',
+    good_settle:'Bernadette just had a good quick settle. Brief warm acknowledgement — midwife tone. 1–2 sentences. Small practical note on keeping momentum.',
+    improving:'Settle times have been getting shorter. Brief observation that the data shows progress. 2 sentences. She may not have noticed.'
+  };
+  e.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
+  e.style.display='block';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:100,system:'You are a warm, no-nonsense sleep coach with midwife energy. Direct, kind, practical. Never preachy. Never use the word "journey". Speak directly to Bernadette.',messages:[{role:'user',content:prompts[trigger]}]})});
+    const data=await res.json();
+    const txt=data.content?.map(c=>c.text||'').join('')||'';
+    if(txt){e.innerHTML='🦆 '+txt;e.style.display='block';}else e.style.display='none';
+  }catch(err){e.style.display='none';}
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATA CONTEXT FOR COACH
+// ═══════════════════════════════════════════════════════════
+function buildDataCtx(){
+  const now=new Date(),last7=[];
+  for(let i=6;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);last7.push(d.toDateString());}
+  const rl=logs.filter(l=>last7.includes(l.date));
+  const rn=nightLogs.filter(n=>last7.includes(n.date));
+  if(!rl.length&&!rn.length)return '';
+  const naps=rl.filter(l=>l.type==='nap');
+  const self=naps.filter(l=>l.method==='self').length,rock=naps.filter(l=>l.method==='rock').length;
+  const hard=rl.filter(l=>l.mood==='hard').length,good=rl.filter(l=>l.mood==='good').length;
+  const settles=rl.filter(l=>l.settle>0).map(l=>l.settle);
+  const avgS=settles.length?Math.round(settles.reduce((a,b)=>a+b,0)/settles.length):null;
+  const today=now.toDateString();
+  return'\n\nLOGGED DATA (last 7 days):\n- Naps: '+naps.length+' (self: '+self+', rocked: '+rock+')\n- Mood: '+good+' good, '+hard+' hard\n- Avg settle: '+(avgS?avgS+'m':'not recorded')+'\n- Avg night wakes: '+(rn.length/7).toFixed(1)+'/night\n- Today: '+rl.filter(l=>l.date===today&&l.type==='nap').length+' nap(s), '+rn.filter(n=>n.date===today).length+' wake(s)';
+}
+
+// ═══════════════════════════════════════════════════════════
+// COACH AI
+// ═══════════════════════════════════════════════════════════
+const BASE_SYS=`You are a warm, direct, no-nonsense sleep coach for Vaughan, a baby born 3 September 2025. You're talking to Bernadette, his mum. Midwife energy — warm, practical, calls it straight. Never preachy. Never use the word "journey". This app is called BravoSleep.
+
+VAUGHAN: Own cot, own room. No dummy. Comfort toys: duck and bunny. Sleep association: rocking (being fixed). No feed-to-sleep. Self-soothes: sucks fingers, grabs toys, rolls — good signs. Crying: waves (hard, pause, hard) — pauses are settling attempts. New cot, arms-free sleep sack. Solids established (~240g/day), 4-5 milk feeds. CIO works for nights, not naps. Two older children in the house. Mainly Bernadette settling.
+
+LIFESTYLE: Very active — church 5-6 days/week, frequent family social. Vaughan always comes. Sunday: supper service 6am (up 5:40am), home 7:30am, second service 11:30am. Monday: school run 8:30-9am, prayer 7pm. Wednesday: church 6:45-8pm. Thursday: grandparents dinner, home 10:30-11pm. Friday: church 5:45-7pm. Saturday: church 11:10am. Family lunches/teas — valued, not refused. Pram naps accepted. Car transfers work half the time.
+
+PLAN: Wake windows 2h30m–3h. Bedtime target 7–7:30pm. Nap method: check-in (5min wait, 2min in, 7min, 10min, rescue at 30min). Nights: CIO 30min cap then check-in. No parental bed after 5am. No escalating ladder. White noise in room. Sleep kit travels everywhere. Bridge nap if nap 2 ends before 2pm.
+
+RESPONSE: Get to the point. Specific and actionable. 3-4 short paragraphs max. Bold key actions. No catastrophising.`;
+
+async function askCoach(text){
+  const input=text||el('coach-input').value.trim();if(!input)return;
+  const out=el('coach-out');el('ask-submit').disabled=true;
+  out.innerHTML='<div class="coach-response"><div class="typing"><span></span><span></span><span></span></div></div>';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,system:BASE_SYS+buildDataCtx(),messages:[{role:'user',content:input}]})});
+    const data=await res.json();
+    const reply=data.content?.map(c=>c.text||'').join('')||'Something went wrong. Try again.';
+    const html=reply.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').split('\n\n').filter(p=>p.trim()).map(p=>'<p>'+p.trim()+'</p>').join('');
+    out.innerHTML='<div class="coach-response"><h4>🦆 Coach says</h4>'+html+'</div>';
+  }catch(e){out.innerHTML='<div class="coach-response"><p style="color:var(--coral)">Can\'t reach the coach. Check your connection.</p></div>';}
+  el('ask-submit').disabled=false;el('coach-input').value='';
+}
+
+function askQuick(q){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  el('tab-coach').classList.add('active');
+  document.querySelectorAll('.nb')[3].classList.add('active');
+  el('coach-input').value=q;askCoach(q);
+}
+function clearCoach(){el('coach-input').value='';el('coach-out').innerHTML='';}
+
+// ═══════════════════════════════════════════════════════════
+// SCHEDULE BUILDER — connected to napMode
+// ═══════════════════════════════════════════════════════════
+function selectDayType(type,btn){
+  currentDayType=type;
+  document.querySelectorAll('.day-type-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  buildSchedule();
+}
+
+function addM(t,m){if(!t)return null;const[h,min]=t.split(':').map(Number);const tot=h*60+min+m;const nh=Math.floor(((tot%1440)+1440)%1440/60);const nm=((tot%60)+60)%60;return String(nh).padStart(2,'0')+':'+String(nm).padStart(2,'0');}
+function isAfter(a,b){return a&&b&&a>b;}
+function fmtT(t){if(!t)return'?';const[h,m]=t.split(':').map(Number);const a=h>=12?'pm':'am';const h12=h%12||12;return h12+(m?':'+String(m).padStart(2,'0'):'')+a;}
+function mRow(time,ico,lbl,hi){const s=hi?' style="background:rgba(123,175,212,.08);border-radius:8px;margin:0 -4px;padding:8px 13px"':'';return'<div class="sched-row"'+s+'><div class="stime">'+(time?fmtT(time):'—')+'</div><div class="sico">'+ico+'</div><div class="slbl">'+lbl+'</div></div>';}
+
+function buildSchedule(){
+  const wake=el('sched-wake').value;
+  const rowsEl=el('sched-rows'),notesEl=el('sched-notes'),titleEl=el('sched-title');
+  if(!wake){rowsEl.innerHTML='<div class="empty" style="padding:12px 0"><span class="eico">👆</span>Enter wake time above</div>';notesEl.innerHTML='';return;}
+
+  const WW=150,N1=45,N2=90,N3=30;
+  const n1s=addM(wake,WW),n1e=addM(n1s,N1);
+  const n2s=addM(n1e,WW),n2e=addM(n2s,N2);
+  const n2c=isAfter(n2e,'15:00')?'15:00':n2e;
+
+  const needsN3=napMode===3||!isAfter(n2c,'14:00');
+  const n3s=needsN3?addM(n2c,WW):null;
+  const n3raw=n3s?addM(n3s,N3):null;
+  const n3c=n3raw&&isAfter(n3raw,'16:30')?'16:30':n3raw;
+
+  const lastNap=n3c||n2c;
+  const bedI=addM(lastNap,225);
+  const bed=isAfter(bedI,'19:30')?'19:30':bedI;
+
+  let rows='',notes='';
+
+  if(currentDayType==='normal'){
+    titleEl.textContent='Normal home day';
+    rows+=mRow(wake,'☀️','Wake. Milk feed.');
+    rows+=mRow(addM(wake,20),'🥣','Breakfast solids.');
+    rows+=mRow(null,'🚗','School run 8:30–9am (5 min drive).');
+    rows+=mRow(n1s,'😴','<strong>Nap 1</strong> — cot, check-in method. Target 45 mins.',true);
+    rows+=mRow(n1e,'🍼','Wake. Milk feed.');
+    rows+=mRow(addM(n1e,30),'🥣','Lunch solids.');
+    rows+=mRow(n2s,'😴','<strong>Nap 2</strong> — cot. Cap at 3pm.',true);
+    rows+=mRow(n2c,'🍼','Wake. Milk feed.');
+    if(needsN3){
+      rows+=mRow(n3s,'😴','<strong>Nap 3 (bridge)</strong> — max 30 mins, end by 4:30pm.',true);
+      rows+=mRow(n3c,'🍼','Wake. Feed.');
+      notes+='<div class="tip brown"><strong>Bridge nap today'+(napMode===3?' (3-nap mode on)':' — nap 2 ended early')+' :</strong> Keep to 30 mins max, awake by 4:30pm.</div>';
+    }
+    rows+=mRow(addM(lastNap,90),'🥣','Dinner solids.');
+    rows+=mRow(addM(bed,-30),'🛁','Bath.');
+    rows+=mRow(addM(bed,-15),'🍼','Milk feed — lights on, keep awake.');
+    rows+=mRow(addM(bed,-5),'🎵','Nappy, sleep sack, 2 songs, duck & bunny.');
+    rows+=mRow(bed,'🌙','<strong>In cot. Lights out. White noise on.</strong>',true);
+    notes+='<div class="tip"><strong>Bedtime tonight: '+fmtT(bed)+'</strong> — hard ceiling '+fmtT(addM(bed,20))+'.</div>';
+
+  } else if(currentDayType==='church-morning'){
+    titleEl.textContent='Church morning (Sat/Sun)';
+    const mustAwake='10:40';
+    const n1fc=addM(wake,WW),n1fe=addM(n1fc,45);
+    const tooLate=isAfter(n1fe,mustAwake);
+    rows+=mRow(wake,'☀️','Wake. Milk feed.');
+    if(!tooLate){rows+=mRow(n1fc,'😴','<strong>Nap 1</strong> — cot. Awake by '+fmtT(mustAwake)+'.',true);rows+=mRow(n1fe,'🍼','Wake if needed. Feed. Get ready.');}
+    else rows+=mRow(null,'⚠️','<strong>Too late for pre-church nap.</strong> Skip — arms/pram at church.');
+    rows+=mRow('11:00','⛪','Leave for church.');
+    rows+=mRow('12:45','🚗','Home. Feed.');
+    rows+=mRow('13:30','😴','<strong>Nap 2</strong> — cot. The important one today. Target 1–1.5h.',true);
+    rows+=mRow('15:00','🍼','Wake by 3pm. Feed.');
+    if(needsN3){rows+=mRow('15:45','😴','<strong>Bridge nap</strong> (3-nap mode) — 30 mins max.',true);rows+=mRow('16:15','🍼','Wake. Feed.');}
+    rows+=mRow('17:00','🥣','Dinner solids.');
+    rows+=mRow('18:30','🎵','Routine: nappy, sleep sack, 2 songs.');
+    rows+=mRow('18:45','🌙','<strong>In cot.</strong>',true);
+    notes='<div class="tip"><strong>Afternoon cot nap is non-negotiable today.</strong> Arms/pram at church = lighter sleep. He needs the real thing after.</div>';
+    if(tooLate)notes+='<div class="tip red"><strong>Woke too late for pre-church nap.</strong> Arms nap at church, then nail the afternoon.</div>';
+
+  } else if(currentDayType==='church-evening'){
+    titleEl.textContent='Church evening (Mon / Wed / Fri)';
+    rows+=mRow(wake,'☀️','Wake. Milk feed.');
+    rows+=mRow(addM(wake,20),'🥣','Breakfast solids.');
+    if(new Date().getDay()===1)rows+=mRow(null,'🚗','School run 8:30–9am.');
+    rows+=mRow(n1s,'😴','<strong>Nap 1</strong> — cot.',true);
+    rows+=mRow(n1e,'🍼','Wake. Milk feed.');
+    rows+=mRow(n2s,'😴','<strong>Nap 2</strong> — <strong>must end by 3pm.</strong>',true);
+    rows+=mRow(n2c,'🍼','Wake. Feed.');
+    if(needsN3){rows+=mRow(n3s,'😴','<strong>Bridge nap</strong> — max 30 mins, end by 4:30pm.',true);rows+=mRow(n3c,'🍼','Wake. Feed.');}
+    rows+=mRow(addM(lastNap,60),'🥣','Dinner solids — before leaving.');
+    rows+=mRow(null,'⛪','Leave. Bring: sleep sack, duck & bunny, white noise on phone.');
+    rows+=mRow(null,'😴','Arms nap at church is fine — don\'t fight it.');
+    rows+=mRow(null,'🚗','Home: keep car dim and quiet.');
+    rows+=mRow(null,'🌙','<strong>Home:</strong> transfer if asleep. If awake: nappy, sleep sack, 1 song, down.',true);
+    notes='<div class="tip red"><strong>Wednesday is hardest</strong> — out through his entire ideal bedtime window. Arms nap at church is okay. Compressed routine on arrival.</div>';
+
+  } else if(currentDayType==='thursday'){
+    titleEl.textContent='Thursday — grandparents\' dinner';
+    rows+=mRow(wake,'☀️','Wake. Milk feed.');
+    rows+=mRow(n1s,'😴','<strong>Nap 1</strong> — cot.',true);
+    rows+=mRow(n1e,'🍼','Wake. Feed.');
+    rows+=mRow(n2s,'😴','<strong>Nap 2</strong> — cot. <strong>Cap by 3pm.</strong>',true);
+    rows+=mRow(n2c,'🍼','Wake. Feed.');
+    if(needsN3){rows+=mRow(n3s,'😴','<strong>Bridge nap</strong> — max 30 mins, end by 4:30pm.',true);rows+=mRow(n3c,'🍼','Wake. Feed.');}
+    rows+=mRow('17:00','🥣','Dinner solids at home before leaving.');
+    rows+=mRow('17:45','🚗','Leave. Bring full sleep kit: sleep sack, duck & bunny, white noise.');
+    rows+=mRow('18:30','🏠','Arrive grandparents.');
+    rows+=mRow('19:00','😴','<strong>Attempt settle</strong> in quiet room. Sleep sack on, 1 song, down. Arms nap if no quiet space.',true);
+    rows+=mRow(null,'🚗','Drive home 10–10:30pm. Car calm and dim.');
+    rows+=mRow(null,'🌙','<strong>Home:</strong> transfer if asleep. Awake: 1 song, straight down. No rocking spiral.',true);
+    notes='<div class="tip"><strong>Thursday goal:</strong> damage control. Two things: nap 2 by 3pm, attempt settle at 7pm. Friday morning, reset.</div>';
+    notes+='<div class="tip green"><strong>Car transfer:</strong> wait 5 mins, white noise on first, one hand on chest.</div>';
+
+  } else if(currentDayType==='family-lunch'){
+    titleEl.textContent='Family lunch day';
+    rows+=mRow(wake,'☀️','Wake. Milk feed.');
+    rows+=mRow(n1s,'😴','<strong>Nap 1</strong> — cot before leaving if timing allows.',true);
+    rows+=mRow(n1e,'🍼','Wake. Feed. Head out.');
+    rows+=mRow(n2s,'😴','<strong>Nap 2</strong> — pram at venue. Don\'t transfer home.',true);
+    rows+=mRow(null,'🍼','Feed when he wakes. Note the time — resets bedtime countdown.');
+    rows+=mRow(null,'🚗','Home by mid-afternoon if possible.');
+    if(needsN3){rows+=mRow(n3s,'😴','<strong>Bridge nap</strong> if home in time — max 30 mins.',true);}
+    rows+=mRow(null,'🌙','<strong>Bedtime:</strong> compressed routine within 30 mins of home. Bath optional.',true);
+    notes='<div class="tip"><strong>Lunch days are recoverable.</strong> Home by 3–4pm = nearly normal afternoon. Pram nap counts.</div>';
+
+  } else if(currentDayType==='family-tea'){
+    titleEl.textContent='Family tea (out all evening)';
+    rows+=mRow(wake,'☀️','Wake. Milk feed.');
+    rows+=mRow(n1s,'😴','<strong>Nap 1</strong> — cot. Get this one in properly.',true);
+    rows+=mRow(n1e,'🍼','Wake. Feed.');
+    rows+=mRow(n2s,'😴','<strong>Nap 2</strong> — cot if home, pram if out. Cap 3pm.',true);
+    rows+=mRow(n2c,'🍼','Wake. Feed. Dinner solids before leaving.');
+    if(needsN3){rows+=mRow(n3s,'😴','<strong>Bridge nap</strong> — pram/arms. 30 mins max.',true);}
+    rows+=mRow(null,'⛪🏠','Out for tea. Pram/arms nap when tired.');
+    rows+=mRow(null,'🚗','Home: car quiet. Let him sleep if he drifts.');
+    rows+=mRow(null,'🌙','<strong>Whenever home:</strong> nappy, sleep sack, 1 song, down. No rocking.',true);
+    notes='<div class="tip"><strong>Tea days:</strong> protocol is the same regardless of arrival time. Boring, quick, down. He\'ll be tired enough.</div>';
+    notes+='<div class="tip green"><strong>Tomorrow morning:</strong> reset from wake-up. One late night doesn\'t undo the training.</div>';
+
+  } else if(currentDayType==='sunday-early'){
+    titleEl.textContent='Sunday — supper service';
+    rows+=mRow('05:40','⏰','<strong>Up at 5:40am.</strong> Milk feed. Dim lights — treat like a night feed.');
+    rows+=mRow('07:30','🏠','Home from supper service.');
+    rows+=mRow('07:45','😴','<strong>Nap 1</strong> — cot. ~2h awake. Put him down now.',true);
+    rows+=mRow('09:00','🍼','Wake. Feed. Breakfast.');
+    rows+=mRow('10:40','⛪','Leave for 11:30am service. Fed and awake.');
+    rows+=mRow('11:30','⛪','Service. Arms nap — let him.');
+    rows+=mRow('12:45','🚗','Home. Feed.');
+    rows+=mRow('13:30','😴','<strong>Nap 2</strong> — cot. The critical one today.',true);
+    rows+=mRow('15:00','🍼','Wake by 3pm. Feed.');
+    if(napMode===3){rows+=mRow('15:45','😴','<strong>Bridge nap</strong> (3-nap mode) — 30 mins max.',true);rows+=mRow('16:15','🍼','Wake. Feed.');}
+    rows+=mRow('17:00','🥣','Dinner solids.');
+    rows+=mRow('18:30','🎵','Routine: nappy, sleep sack, 2 songs.');
+    rows+=mRow('18:45','🌙','<strong>In cot. Early bedtime — started at 5:40am.</strong>',true);
+    notes='<div class="tip red"><strong>Sunday is survival day.</strong> 5:40am start is brutal. One non-negotiable: afternoon cot nap after 11:30am service.</div>';
+    notes+='<div class="tip"><strong>Monday:</strong> may sleep later. Let him. Reset from wake-up.</div>';
+  }
+
+  rowsEl.innerHTML=rows;notesEl.innerHTML=notes;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SIGN OUT
+// ═══════════════════════════════════════════════════════════
+async function signOut(){
+  await sb.auth.signOut();
+  currentUser=null;familyId=null;logs=[];nightLogs=[];wins=[];dayRatings={};
+  el('main-app').style.display='none';
+  el('auth-screen').style.display='flex';
+  showAuth('signin');
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function el(id){return document.getElementById(id);}
+function showToast(msg){const t=el('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+function setSyncDot(s){const d=el('sync-dot');if(!d)return;d.className='sync-dot'+(s==='syncing'?' syncing':s==='error'?' error':'');}
+function calcDur(s,e){if(!s||!e)return null;const[sh,sm]=s.split(':').map(Number),[eh,em]=e.split(':').map(Number);let m=(eh*60+em)-(sh*60+sm);if(m<0)m+=1440;return m;}
+
+// ═══════════════════════════════════════════════════════════
+// BOOT — wait for Supabase auth before doing anything
+// ═══════════════════════════════════════════════════════════
+setInterval(updateWakeWindow,60000);
+setInterval(calcAge,3600000);
+</script>
+</body>
+</html>
