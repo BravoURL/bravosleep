@@ -789,28 +789,38 @@ const SUPA_URL='https://fewucfjtavgnlgxejiyo.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZld3VjZmp0YXZnbmxneGVqaXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODEzODAsImV4cCI6MjA4OTY1NzM4MH0.rGYyGCuVwXpfIMGLm_n5rHnIwgC2BDC8OD7g7B8ATFo';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 
-// Auth state listener — only init once, recover gracefully from background
+// ── AUTH ──────────────────────────────────────────────────
+// On every page load, check for existing session first.
+// Then listen for sign-in/out events.
 let appInitialised=false;
+
+async function bootApp(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(session?.user){
+    currentUser=session.user;
+    appInitialised=true;
+    await initApp();
+  } else {
+    el('loading-screen').style.display='none';
+    el('auth-screen').style.display='flex';
+    showAuth('signin');
+  }
+}
+
 sb.auth.onAuthStateChange(async(event,session)=>{
-  if(event==='SIGNED_OUT'||event==='USER_DELETED'||(!session)){
+  if(event==='SIGNED_IN'&&session?.user&&!appInitialised){
+    currentUser=session.user;appInitialised=true;await initApp();
+  }
+  if(event==='SIGNED_OUT'){
     appInitialised=false;currentUser=null;familyId=null;
     el('loading-screen').style.display='none';
     el('main-app').style.display='none';
     el('auth-screen').style.display='flex';showAuth('signin');
-    return;
   }
-  if(!session?.user)return;
-  // If app is already showing correctly, do nothing
-  if(appInitialised&&el('main-app').style.display==='flex')return;
-  // If stuck on loading screen with a valid session, recover
-  if(appInitialised&&el('loading-screen').style.display==='flex'){
-    el('loading-screen').style.display='none';
-    el('main-app').style.display='flex';
-    return;
-  }
-  // Fresh init
-  appInitialised=true;currentUser=session.user;await initApp();
 });
+
+// Boot immediately
+bootApp();
 
 // ═══════════════════════════════════════════════════════════
 // APP STATE (cloud-backed — no localStorage)
@@ -882,7 +892,8 @@ async function enterApp(){el('auth-screen').style.display='none';await initApp()
 
 async function signOut(){
   appInitialised=false;
-  await sb.auth.signOut();currentUser=null;familyId=null;
+  await sb.auth.signOut();
+  currentUser=null;familyId=null;
   el('main-app').style.display='none';
   el('auth-screen').style.display='flex';showAuth('signin');
 }
