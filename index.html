@@ -789,9 +789,6 @@ const SUPA_URL='https://fewucfjtavgnlgxejiyo.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZld3VjZmp0YXZnbmxneGVqaXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODEzODAsImV4cCI6MjA4OTY1NzM4MH0.rGYyGCuVwXpfIMGLm_n5rHnIwgC2BDC8OD7g7B8ATFo';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 
-// ── AUTH ──────────────────────────────────────────────────
-// On every page load, check for existing session first.
-// Then listen for sign-in/out events.
 let appInitialised=false;
 
 async function bootApp(){
@@ -807,8 +804,10 @@ async function bootApp(){
   }
 }
 
+// Listener only handles new sign-ins and sign-outs
+// Does NOT handle TOKEN_REFRESHED to avoid re-running initApp
 sb.auth.onAuthStateChange(async(event,session)=>{
-  if(event==='SIGNED_IN'&&session?.user&&!appInitialised){
+  if(event==='SIGNED_IN'&&!appInitialised&&session?.user){
     currentUser=session.user;appInitialised=true;await initApp();
   }
   if(event==='SIGNED_OUT'){
@@ -819,8 +818,24 @@ sb.auth.onAuthStateChange(async(event,session)=>{
   }
 });
 
-// Boot immediately
 bootApp();
+
+// Recover if stuck when tab becomes visible
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState!=='visible')return;
+  if(el('main-app').style.display==='flex')return;
+  if(el('loading-screen').style.display==='flex'){
+    const{data:{session}}=await sb.auth.getSession();
+    if(session?.user){
+      el('loading-screen').style.display='none';
+      el('main-app').style.display='flex';
+    } else {
+      el('loading-screen').style.display='none';
+      el('auth-screen').style.display='flex';
+      showAuth('signin');
+    }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 // APP STATE (cloud-backed — no localStorage)
@@ -950,43 +965,60 @@ function subscribeToChanges(){
     .subscribe();
 }
 
-// ═══════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════
 async function initApp(){
-  el('loading-screen').style.display='flex';
-  el('auth-screen').style.display='none';
-  el('main-app').style.display='none';
-  if(!familyId){
-    const{data:members}=await sb.from('family_members').select('family_id').eq('user_id',currentUser.id).limit(1);
-    if(members&&members.length)familyId=members[0].family_id;
-  }
-  if(!familyId){
+  // Safety timeout — if init takes more than 8 seconds, recover gracefully
+  const timeout=setTimeout(()=>{
+    console.warn('BravoSleep: initApp timeout — showing app anyway');
     el('loading-screen').style.display='none';
-    el('auth-screen').style.display='flex';showAuth('signup');return;
+    el('main-app').style.display='flex';
+  },8000);
+
+  try{
+    el('loading-screen').style.display='flex';
+    el('auth-screen').style.display='none';
+    el('main-app').style.display='none';
+
+    if(!familyId){
+      const{data:members}=await sb.from('family_members').select('family_id').eq('user_id',currentUser.id).limit(1);
+      if(members&&members.length)familyId=members[0].family_id;
+    }
+    if(!familyId){
+      clearTimeout(timeout);
+      el('loading-screen').style.display='none';
+      el('auth-screen').style.display='flex';showAuth('signup');return;
+    }
+
+    const{data:settings}=await sb.from('family_settings').select('nap_mode').eq('family_id',familyId).single();
+    if(settings)napMode=settings.nap_mode||2;
+
+    await loadAllData();
+    subscribeToChanges();
+
+    // Set invite code
+    const code=familyId.replace(/-/g,'').substring(0,6).toUpperCase();
+    const codeEl=el('family-code-display');
+    if(codeEl){
+      codeEl.textContent=code;codeEl.style.cursor='pointer';
+      codeEl.onclick=()=>{navigator.clipboard.writeText(code).then(()=>showToast('Code copied: '+code)).catch(()=>showToast('Your code: '+code));};
+    }
+
+    // Set user name
+    const name=currentUser.user_metadata?.full_name||currentUser.email.split('@')[0];
+    if(el('user-display'))el('user-display').textContent=name.split(' ')[0];
+
+    clearTimeout(timeout);
+    el('loading-screen').style.display='none';
+    el('main-app').style.display='flex';
+    setNapModeUI(napMode);
+    calcAge();setDates();
+    renderLogs();renderNightLogs();renderWins();renderWeekGrid();updateStats();
+
+  }catch(err){
+    console.error('BravoSleep initApp error:',err);
+    clearTimeout(timeout);
+    el('loading-screen').style.display='none';
+    el('main-app').style.display='flex';
   }
-  const{data:settings}=await sb.from('family_settings').select('nap_mode').eq('family_id',familyId).single();
-  if(settings)napMode=settings.nap_mode||2;
-  await loadAllData();
-  subscribeToChanges();
-  // Set invite code — first 6 chars of family UUID with no dashes, uppercase
-  const code=familyId.replace(/-/g,'').substring(0,6).toUpperCase();
-  const codeEl=el('family-code-display');
-  if(codeEl){
-    codeEl.textContent=code;
-    codeEl.style.cursor='pointer';
-    codeEl.onclick=()=>{
-      navigator.clipboard.writeText(code).then(()=>showToast('Code copied: '+code)).catch(()=>showToast('Your code: '+code));
-    };
-  }
-  // Set user name in header
-  const name=currentUser.user_metadata?.full_name||currentUser.email.split('@')[0];
-  if(el('user-display'))el('user-display').textContent=name.split(' ')[0];
-  el('loading-screen').style.display='none';
-  el('main-app').style.display='flex';
-  setNapModeUI(napMode);
-  calcAge();setDates();
-  renderLogs();renderNightLogs();renderWins();renderWeekGrid();updateStats();
 }
 
 // ═══════════════════════════════════════════════════════════
