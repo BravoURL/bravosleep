@@ -745,7 +745,7 @@ textarea::placeholder{color:var(--muted)}
       <div class="card">
         <div class="ct">👨‍👩‍👧 Family account</div>
         <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Share this code with your partner so they can join on their phone:</div>
-        <div style="font-family:'Lora',serif;font-size:28px;color:var(--blue2);letter-spacing:5px;text-align:center;padding:10px;background:var(--faint);border-radius:10px;margin-bottom:10px" id="invite-display">——</div>
+        <div style="font-family:'Lora',serif;font-size:28px;color:var(--blue2);letter-spacing:5px;text-align:center;padding:10px;background:var(--faint);border-radius:10px;margin-bottom:10px" id="family-code-display">——</div>
         <div style="font-size:11.5px;color:var(--muted);text-align:center;margin-bottom:14px">They tap "Create account" → enter this code → instant sync</div>
         <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Signed in as: <span style="color:var(--text)" id="user-display">—</span></div>
         <button onclick="signOut()" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12.5px;cursor:pointer">Sign out</button>
@@ -789,23 +789,27 @@ const SUPA_URL='https://fewucfjtavgnlgxejiyo.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZld3VjZmp0YXZnbmxneGVqaXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODEzODAsImV4cCI6MjA4OTY1NzM4MH0.rGYyGCuVwXpfIMGLm_n5rHnIwgC2BDC8OD7g7B8ATFo';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 
-// Auth state listener — only init on actual sign-in, not token refreshes
+// Auth state listener — only init once, recover gracefully from background
 let appInitialised=false;
 sb.auth.onAuthStateChange(async(event,session)=>{
-  if(event==='SIGNED_OUT'||(!session)){
+  if(event==='SIGNED_OUT'||event==='USER_DELETED'||(!session)){
     appInitialised=false;currentUser=null;familyId=null;
     el('loading-screen').style.display='none';
     el('main-app').style.display='none';
     el('auth-screen').style.display='flex';showAuth('signin');
     return;
   }
-  if(session?.user&&!appInitialised){
-    appInitialised=true;currentUser=session.user;await initApp();
-  } else if(session?.user&&appInitialised&&el('main-app').style.display==='none'){
-    // App was hidden/backgrounded and got stuck — recover silently
+  if(!session?.user)return;
+  // If app is already showing correctly, do nothing
+  if(appInitialised&&el('main-app').style.display==='flex')return;
+  // If stuck on loading screen with a valid session, recover
+  if(appInitialised&&el('loading-screen').style.display==='flex'){
     el('loading-screen').style.display='none';
     el('main-app').style.display='flex';
+    return;
   }
+  // Fresh init
+  appInitialised=true;currentUser=session.user;await initApp();
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -956,10 +960,14 @@ async function initApp(){
   subscribeToChanges();
   // Set invite code — first 6 chars of family UUID with no dashes, uppercase
   const code=familyId.replace(/-/g,'').substring(0,6).toUpperCase();
-  if(el('invite-display'))el('invite-display').textContent=code;
-  if(el('invite-display'))el('invite-display').onclick=()=>{
-    navigator.clipboard.writeText(code).then(()=>showToast('Code copied: '+code)).catch(()=>showToast('Your code: '+code));
-  };
+  const codeEl=el('family-code-display');
+  if(codeEl){
+    codeEl.textContent=code;
+    codeEl.style.cursor='pointer';
+    codeEl.onclick=()=>{
+      navigator.clipboard.writeText(code).then(()=>showToast('Code copied: '+code)).catch(()=>showToast('Your code: '+code));
+    };
+  }
   // Set user name in header
   const name=currentUser.user_metadata?.full_name||currentUser.email.split('@')[0];
   if(el('user-display'))el('user-display').textContent=name.split(' ')[0];
