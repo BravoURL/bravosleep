@@ -787,11 +787,25 @@ textarea::placeholder{color:var(--muted)}
 // ═══════════════════════════════════════════════════════════
 const SUPA_URL='https://fewucfjtavgnlgxejiyo.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZld3VjZmp0YXZnbmxneGVqaXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODEzODAsImV4cCI6MjA4OTY1NzM4MH0.rGYyGCuVwXpfIMGLm_n5rHnIwgC2BDC8OD7g7B8ATFo';
-const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
-// Auth state listener — this is the single entry point
+const sb=supabase.createClient(SUPA_URL,SUPA_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+
+// Auth state listener — only init on actual sign-in, not token refreshes
+let appInitialised=false;
 sb.auth.onAuthStateChange(async(event,session)=>{
-  if(session?.user){currentUser=session.user;await initApp();}
-  else{el('loading-screen').style.display='none';el('main-app').style.display='none';el('auth-screen').style.display='flex';showAuth('signin');}
+  if(event==='SIGNED_OUT'||(!session)){
+    appInitialised=false;currentUser=null;familyId=null;
+    el('loading-screen').style.display='none';
+    el('main-app').style.display='none';
+    el('auth-screen').style.display='flex';showAuth('signin');
+    return;
+  }
+  if(session?.user&&!appInitialised){
+    appInitialised=true;currentUser=session.user;await initApp();
+  } else if(session?.user&&appInitialised&&el('main-app').style.display==='none'){
+    // App was hidden/backgrounded and got stuck — recover silently
+    el('loading-screen').style.display='none';
+    el('main-app').style.display='flex';
+  }
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -832,10 +846,12 @@ async function signUp(){
   if(error){el('signup-error').textContent=error.message;return;}
   const uid=data.user.id;
   if(invite){
-    // Join existing family by invite code (first 6 chars of UUID)
-    const{data:fams}=await sb.from('families').select('id').ilike('id',invite+'%').limit(1);
-    if(fams&&fams.length){
-      familyId=fams[0].id;
+    // Invite code = first 6 chars of family UUID with dashes removed, uppercase
+    // Search all families and match by stripping dashes from their IDs
+    const{data:fams}=await sb.from('families').select('id');
+    const matched=fams&&fams.find(f=>f.id.replace(/-/g,'').substring(0,6).toUpperCase()===invite.toUpperCase());
+    if(matched){
+      familyId=matched.id;
       await sb.from('family_members').insert({family_id:familyId,user_id:uid});
       el('signup-error').textContent='';showToast('Joined family! Welcome 🦆');
     } else {el('signup-error').textContent='Invite code not found. Check with your partner.';return;}
@@ -861,6 +877,7 @@ function copyInvite(){
 async function enterApp(){el('auth-screen').style.display='none';await initApp();}
 
 async function signOut(){
+  appInitialised=false;
   await sb.auth.signOut();currentUser=null;familyId=null;
   el('main-app').style.display='none';
   el('auth-screen').style.display='flex';showAuth('signin');
@@ -937,9 +954,12 @@ async function initApp(){
   if(settings)napMode=settings.nap_mode||2;
   await loadAllData();
   subscribeToChanges();
-  // Set invite code (first 6 chars of family UUID, no dashes)
+  // Set invite code — first 6 chars of family UUID with no dashes, uppercase
   const code=familyId.replace(/-/g,'').substring(0,6).toUpperCase();
   if(el('invite-display'))el('invite-display').textContent=code;
+  if(el('invite-display'))el('invite-display').onclick=()=>{
+    navigator.clipboard.writeText(code).then(()=>showToast('Code copied: '+code)).catch(()=>showToast('Your code: '+code));
+  };
   // Set user name in header
   const name=currentUser.user_metadata?.full_name||currentUser.email.split('@')[0];
   if(el('user-display'))el('user-display').textContent=name.split(' ')[0];
